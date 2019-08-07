@@ -18,7 +18,7 @@ architecture arch of sprite is
   constant SPRITE_RAM_ADDR_WIDTH : natural := 4;
   constant SPRITE_RAM_DATA_WIDTH : natural := 64;
 
-  type state_t is (INIT, LOAD, LATCH, BLIT, JUMP);
+  type state_t is (INIT, LOAD, LATCH, CHECK, BLIT, JUMP);
 
   type sprite_pos_t is record
     x : unsigned(4 downto 0);
@@ -256,7 +256,7 @@ begin
     end if;
   end process;
 
-  fsm_comb : process (state, blit_done)
+  fsm_comb : process (state, sprite_size, blit_done)
   begin
     next_state <= state;
 
@@ -265,7 +265,14 @@ begin
     elsif state = LOAD then
       next_state <= LATCH;
     elsif state = LATCH then
-      next_state <= BLIT;
+      next_state <= CHECK;
+    elsif state = CHECK then
+      -- TODO: check enabled
+      if sprite_size /= 0 then
+        next_state <= BLIT;
+      else
+        next_state <= JUMP;
+      end if;
     elsif state = BLIT then
       if blit_done = '1' then
         next_state <= JUMP;
@@ -282,14 +289,12 @@ begin
   dest_pos.x <= resize(sprite.pos.x+src_pos.x, dest_pos.x'length);
   dest_pos.y <= resize(sprite.pos.y+src_pos.y, dest_pos.y'length);
 
-  -- The blit is done when all the pixels have been copied, or the sprite has a zero size.
-  --
-  -- TODO: check enabled
-  blit_done <= '1' when (src_pos.x = sprite_size-1 and src_pos.y = sprite_size-1) or (sprite_size = 0) else '0';
+  -- The sprite has been blitted when all the pixels have been copied, or the sprite has a zero size.
+  blit_done <= '1' when src_pos.x = sprite_size-1 and src_pos.y = sprite_size-1 else '0';
 
   frame_buffer_addr_wr <= std_logic_vector(dest_pos.y(7 downto 0) & dest_pos.x(7 downto 0));
   frame_buffer_din <= (others => '1');
-  frame_buffer_wren <= '1' when dest_pos.x(8) = '0' and dest_pos.y(8) = '0' else '0';
+  frame_buffer_wren <= '1' when state = BLIT and dest_pos.x(8) = '0' and dest_pos.y(8) = '0' else '0';
 
   frame_buffer_addr_rd <= std_logic_vector(video_pos.y(7 downto 0) & video_pos.x(7 downto 0));
   frame_buffer_rden <= not (video_blank.hblank or video_blank.vblank);
