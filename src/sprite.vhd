@@ -15,7 +15,10 @@ entity sprite is
 end sprite;
 
 architecture arch of sprite is
-  type state_t is (INIT, BLIT);
+  constant SPRITE_RAM_ADDR_WIDTH : natural := 4;
+  constant SPRITE_RAM_DATA_WIDTH : natural := 64;
+
+  type state_t is (INIT, LOAD, LATCH, BLIT);
 
   type sprite_pos_t is record
     x : unsigned(4 downto 0);
@@ -24,8 +27,13 @@ architecture arch of sprite is
 
   signal state, next_state : state_t;
 
+  -- clock signals
   signal clk_12 : std_logic;
-  signal cen_6 : std_logic;
+  signal cen_6  : std_logic;
+
+  -- RAM signals
+  signal sprite_ram_addr : std_logic_vector(SPRITE_RAM_ADDR_WIDTH-1 downto 0);
+  signal sprite_ram_dout : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0);
 
   -- video signals
   signal video_pos   : pos_t;
@@ -55,13 +63,80 @@ architecture arch of sprite is
 
   -- pixel data
   signal pixel : nibble_t;
-  signal pixel_2 : nibble_t;
 
-  constant sprite : sprite_t := (
-    code  => "00000000",
-    pos   => (x => "001000000", y => "001000000"),
-    size  => "01"
-  );
+  -- constant sprite : sprite_t := (
+  --   code  => "000000000000",
+  --   pos   => (x => "001000000", y => "001000000"),
+  --   size  => "01"
+  -- );
+
+  -- sprite data
+  signal sprite : sprite_t;
+
+  -- byte 0
+  constant SPRITE_HI_CODE_MSB : natural := 7;
+  constant SPRITE_HI_CODE_LSB : natural := 4;
+  constant SPRITE_ENABLE_BIT  : natural := 2;
+  constant SPRITE_FLIP_Y_BIT  : natural := 1;
+  constant SPRITE_FLIP_X_BIT  : natural := 0;
+
+  -- byte 1
+  constant SPRITE_LO_CODE_MSB : natural := 15;
+  constant SPRITE_LO_CODE_LSB : natural := 8;
+
+  -- byte 2
+  constant SPRITE_SIZE_MSB : natural := 17;
+  constant SPRITE_SIZE_LSB : natural := 16;
+
+  -- byte 3
+  constant SPRITE_PRIORITY_MSB : natural := 31;
+  constant SPRITE_PRIORITY_LSB : natural := 30;
+  constant SPRITE_HI_POS_Y_BIT : natural := 29;
+  constant SPRITE_HI_POS_X_BIT : natural := 28;
+  constant SPRITE_COLOR_MSB    : natural := 27;
+  constant SPRITE_COLOR_LSB    : natural := 24;
+
+  -- byte 4
+  constant SPRITE_LO_POS_Y_MSB : natural := 39;
+  constant SPRITE_LO_POS_Y_LSB : natural := 32;
+
+  -- byte 5
+  constant SPRITE_LO_POS_X_MSB : natural := 47;
+  constant SPRITE_LO_POS_X_LSB : natural := 40;
+
+  -- initialise sprite from a raw 64-bit value
+  --
+  --  byte     bit        description
+  -- --------+-76543210-+----------------
+  --       0 | xxxx---- | hi code
+  --         | -----x-- | enable
+  --         | ------x- | flip Y
+  --         | -------x | flip X
+  --       1 | xxxxxxxx | lo code
+  --       2 | ------xx | size
+  --       3 | xx-------| priority
+  --         | --x----- | hi pos Y
+  --         | ---x---- | hi pos X
+  --         | ----xxxx | colour
+  --       4 | xxxxxxxx | lo pos Y
+  --       5 | xxxxxxxx | lo pos X
+  --       6 | -------- |
+  --       7 | -------- |
+  function init_sprite(data : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0)) return sprite_t is
+    variable sprite : sprite_t;
+  begin
+    -- sprite.code     := unsigned(data(SPRITE_HI_CODE_MSB downto SPRITE_HI_CODE_LSB)) & unsigned(data(SPRITE_LO_CODE_MSB downto SPRITE_LO_CODE_LSB));
+    -- sprite.color    := unsigned(data(SPRITE_COLOR_MSB downto SPRITE_COLOR_LSB));
+    -- sprite.enable   := data(SPRITE_ENABLE_BIT);
+    -- sprite.flip_x   := data(SPRITE_FLIP_X_BIT);
+    -- sprite.flip_y   := data(SPRITE_FLIP_Y_BIT);
+    sprite.pos.x    := data(SPRITE_HI_POS_X_BIT) & unsigned(data(SPRITE_LO_POS_X_MSB downto SPRITE_LO_POS_X_LSB));
+    sprite.pos.y    := data(SPRITE_HI_POS_Y_BIT) & unsigned(data(SPRITE_LO_POS_Y_MSB downto SPRITE_LO_POS_Y_LSB));
+    -- sprite.priority := unsigned(data(SPRITE_PRIORITY_MSB downto SPRITE_PRIORITY_LSB));
+    sprite.size     := unsigned(data(SPRITE_SIZE_MSB downto SPRITE_SIZE_LSB));
+
+    return sprite;
+  end init_sprite;
 
   -- calculate sprite size (8x8, 16x16, 32x32)
   function sprite_size_in_pixels(size : unsigned(1 downto 0)) return natural is
@@ -94,6 +169,19 @@ begin
     pos   => video_pos,
     sync  => video_sync,
     blank => video_blank
+  );
+
+  sprite_ram : entity work.single_port_rom
+  generic map (
+    ADDR_WIDTH         => SPRITE_RAM_ADDR_WIDTH,
+    DATA_WIDTH         => SPRITE_RAM_DATA_WIDTH,
+    INIT_FILE          => "rom/sprites.mif",
+    ENABLE_RUNTIME_MOD => "YES"
+  )
+  port map (
+    clk  => clk_12,
+    addr => sprite_ram_addr,
+    dout => sprite_ram_dout
   );
 
   sprite_frame_buffer : entity work.frame_buffer
@@ -134,7 +222,7 @@ begin
   pixel_counters : process (clk_12)
   begin
     if rising_edge(clk_12) then
-      if state = INIT then
+      if state /= BLIT then
         src_pos.x <= (others => '0');
         src_pos.y <= (others => '0');
       else
@@ -153,6 +241,27 @@ begin
     end if;
   end process;
 
+  -- load sprite from RAM
+  load_sprite : process (clk_12)
+  begin
+    if rising_edge(clk_12) then
+      if state = LOAD then
+        -- TODO: set address
+        sprite_ram_addr <= (others => '0');
+      end if;
+    end if;
+  end process;
+
+  -- latch sprite from RAM
+  latch_sprite : process (clk_12)
+  begin
+    if rising_edge(clk_12) then
+      if state = LATCH then
+        sprite <= init_sprite(sprite_ram_dout);
+      end if;
+    end if;
+  end process;
+
   fsm_sync : process (clk_12)
   begin
     if rising_edge(clk_12) then
@@ -165,7 +274,16 @@ begin
     next_state <= state;
 
     if state = INIT then
-      next_state <= BLIT;
+      next_state <= LOAD;
+    elsif state = LOAD then
+      next_state <= LATCH;
+    elsif state = LATCH then
+      -- TODO: check enabled
+      if sprite_size /= 0 then
+        next_state <= BLIT;
+      else
+        next_state <= INIT;
+      end if;
     elsif state = BLIT then
       if blit_done = '1' then
         next_state <= INIT;
@@ -195,15 +313,14 @@ begin
   video_on <= not (video_blank.hblank or video_blank.vblank);
   vga_csync <= not (video_sync.hsync xor video_sync.vsync);
 
-  process (clk_12)
+  video_output : process (clk_12)
   begin
     if rising_edge(clk_12) then
       if cen_6 = '1' then
-        pixel_2 <= pixel;
         if video_on = '1' then
-          vga_r <= pixel_2 & pixel_2(3 downto 2);
-          vga_g <= pixel_2 & pixel_2(3 downto 2);
-          vga_b <= pixel_2 & pixel_2(3 downto 2);
+          vga_r <= pixel & pixel(3 downto 2);
+          vga_g <= pixel & pixel(3 downto 2);
+          vga_b <= pixel & pixel(3 downto 2);
         else
           vga_r <= (others => '0');
           vga_g <= (others => '0');
