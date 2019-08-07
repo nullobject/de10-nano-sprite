@@ -15,15 +15,24 @@ entity sprite is
 end sprite;
 
 architecture arch of sprite is
+  type state_t is (INIT, BLIT);
+
+  type sprite_pos_t is record
+    x : unsigned(4 downto 0);
+    y : unsigned(4 downto 0);
+  end record sprite_pos_t;
+
+  signal state, next_state : state_t;
+
   signal clk_12 : std_logic;
   signal cen_6 : std_logic;
-  signal move_clken : std_logic;
 
   -- video signals
   signal video_pos   : pos_t;
   signal video_sync  : sync_t;
   signal video_blank : blank_t;
   signal video_on    : std_logic;
+  signal vblank_falling : std_logic;
 
   -- frame buffer
   signal frame_buffer_addr_rd : std_logic_vector(15 downto 0);
@@ -34,15 +43,36 @@ architecture arch of sprite is
   signal frame_buffer_rden    : std_logic;
   signal frame_buffer_wren    : std_logic;
 
-  signal vblank_falling : std_logic;
+  -- position signals
+  signal src_pos  : sprite_pos_t;
+  signal dest_pos : pos_t;
 
-  signal x : natural range 0 to 255;
-  signal y : natural range 0 to 255;
-  signal n : natural range 0 to 255;
+  -- sprite size in pixels
+  signal sprite_size : unsigned(5 downto 0);
+
+  -- control signals
+  signal blit_done : std_logic;
 
   -- pixel data
   signal pixel : nibble_t;
   signal pixel_2 : nibble_t;
+
+  constant sprite : sprite_t := (
+    code  => "00000000",
+    pos   => (x => "001000000", y => "001000000"),
+    size  => "01"
+  );
+
+  -- calculate sprite size (8x8, 16x16, 32x32)
+  function sprite_size_in_pixels(size : unsigned(1 downto 0)) return natural is
+  begin
+    case size is
+      when "00" => return 0;
+      when "01" => return 8;
+      when "10" => return 16;
+      when "11" => return 32;
+    end case;
+  end sprite_size_in_pixels;
 begin
   my_pll : entity pll.pll
   port map (
@@ -56,10 +86,6 @@ begin
   clock_divider_6 : entity work.clock_divider
   generic map (DIVISOR => 2)
   port map (clk => clk_12, cen => cen_6);
-
-  move_clken_gen : entity work.clock_divider
-  generic map (DIVISOR => 600000)
-  port map (clk => clk_12, cen => move_clken);
 
   sync_gen : entity work.sync_gen
   port map (
@@ -104,30 +130,62 @@ begin
     end if;
   end process;
 
-  process (clk_12)
+  -- sprite pixel counters
+  pixel_counters : process (clk_12)
   begin
     if rising_edge(clk_12) then
-      if x = 63 then
-        x <= 0;
-
-        if y = 63+16 then
-          y <= 16;
-        else
-          y <= y + 1;
-        end if;
+      if state = INIT then
+        src_pos.x <= (others => '0');
+        src_pos.y <= (others => '0');
       else
-        x <= x + 1;
-      end if;
+        if src_pos.x = sprite_size-1 then
+          src_pos.x <= (others => '0');
 
-      if move_clken = '1' then
-        n <= n + 1;
+          if src_pos.y = sprite_size-1 then
+            src_pos.y <= (others => '0');
+          else
+            src_pos.y <= src_pos.y + 1;
+          end if;
+        else
+          src_pos.x <= src_pos.x + 1;
+        end if;
       end if;
     end if;
   end process;
 
-  frame_buffer_addr_wr <= std_logic_vector(to_unsigned(y, 8) & to_unsigned(x+n, 8));
+  fsm_sync : process (clk_12)
+  begin
+    if rising_edge(clk_12) then
+      state <= next_state;
+    end if;
+  end process;
+
+  fsm_comb : process (state)
+  begin
+    next_state <= state;
+
+    if state = INIT then
+      next_state <= BLIT;
+    elsif state = BLIT then
+      if blit_done = '1' then
+        next_state <= INIT;
+      end if;
+    end if;
+  end process;
+
+  -- set sprite size
+  sprite_size <= to_unsigned(sprite_size_in_pixels(sprite.size), sprite_size'length);
+
+  -- TODO: handle flipping
+  dest_pos.x <= resize(sprite.pos.x+src_pos.x, dest_pos.x'length);
+  dest_pos.y <= resize(sprite.pos.y+src_pos.y, dest_pos.y'length);
+
+  -- the blit is done when all the sprite pixels have been copied
+  blit_done <= '1' when src_pos.x = sprite_size-1 and src_pos.y = sprite_size-1 else '0';
+
+  frame_buffer_addr_wr <= std_logic_vector(dest_pos.y(7 downto 0) & dest_pos.x(7 downto 0));
   frame_buffer_din <= (others => '1');
-  frame_buffer_wren <= '1';
+  frame_buffer_wren <= '1' when dest_pos.x(8) = '0' and dest_pos.y(8) = '0' else '0';
 
   frame_buffer_addr_rd <= std_logic_vector(video_pos.y(7 downto 0) & video_pos.x(7 downto 0));
   frame_buffer_rden <= not (video_blank.hblank or video_blank.vblank);

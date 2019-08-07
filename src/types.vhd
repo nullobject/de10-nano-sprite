@@ -23,6 +23,9 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 package types is
+  subtype byte_t is std_logic_vector(7 downto 0);
+  subtype nibble_t is std_logic_vector(3 downto 0);
+
   -- represents a 2D position
   type pos_t is record
     x : unsigned(8 downto 0);
@@ -41,6 +44,10 @@ package types is
     vblank : std_logic;
   end record blank_t;
 
-  subtype byte_t is std_logic_vector(7 downto 0);
-  subtype nibble_t is std_logic_vector(3 downto 0);
+  -- represents a sprite
+  type sprite_t is record
+    code : unsigned(7 downto 0);
+    pos  : pos_t;
+    size : unsigned(1 downto 0);
+  end record sprite_t;
 end package types;
