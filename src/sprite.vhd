@@ -18,7 +18,7 @@ architecture arch of sprite is
   constant SPRITE_RAM_ADDR_WIDTH : natural := 4;
   constant SPRITE_RAM_DATA_WIDTH : natural := 64;
 
-  type state_t is (INIT, LOAD, LATCH, BLIT);
+  type state_t is (INIT, LOAD, LATCH, BLIT, JUMP);
 
   type sprite_pos_t is record
     x : unsigned(4 downto 0);
@@ -64,14 +64,10 @@ architecture arch of sprite is
   -- pixel data
   signal pixel : nibble_t;
 
-  -- constant sprite : sprite_t := (
-  --   code  => "000000000000",
-  --   pos   => (x => "001000000", y => "001000000"),
-  --   size  => "01"
-  -- );
-
   -- sprite data
   signal sprite : sprite_t;
+
+  signal sprite_index : unsigned(1 downto 0);
 
   -- byte 0
   constant SPRITE_HI_CODE_MSB : natural := 7;
@@ -105,23 +101,6 @@ architecture arch of sprite is
   constant SPRITE_LO_POS_X_LSB : natural := 40;
 
   -- initialise sprite from a raw 64-bit value
-  --
-  --  byte     bit        description
-  -- --------+-76543210-+----------------
-  --       0 | xxxx---- | hi code
-  --         | -----x-- | enable
-  --         | ------x- | flip Y
-  --         | -------x | flip X
-  --       1 | xxxxxxxx | lo code
-  --       2 | ------xx | size
-  --       3 | xx-------| priority
-  --         | --x----- | hi pos Y
-  --         | ---x---- | hi pos X
-  --         | ----xxxx | colour
-  --       4 | xxxxxxxx | lo pos Y
-  --       5 | xxxxxxxx | lo pos X
-  --       6 | -------- |
-  --       7 | -------- |
   function init_sprite(data : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0)) return sprite_t is
     variable sprite : sprite_t;
   begin
@@ -218,6 +197,15 @@ begin
     end if;
   end process;
 
+  sprite_index_counter : process (clk_12)
+  begin
+    if rising_edge(clk_12) then
+      if state = JUMP then
+        sprite_index <= sprite_index + 1;
+      end if;
+    end if;
+  end process;
+
   -- sprite pixel counters
   pixel_counters : process (clk_12)
   begin
@@ -246,8 +234,7 @@ begin
   begin
     if rising_edge(clk_12) then
       if state = LOAD then
-        -- TODO: set address
-        sprite_ram_addr <= (others => '0');
+        sprite_ram_addr <= std_logic_vector(resize(sprite_index, sprite_ram_addr'length));
       end if;
     end if;
   end process;
@@ -269,7 +256,7 @@ begin
     end if;
   end process;
 
-  fsm_comb : process (state)
+  fsm_comb : process (state, blit_done)
   begin
     next_state <= state;
 
@@ -278,16 +265,13 @@ begin
     elsif state = LOAD then
       next_state <= LATCH;
     elsif state = LATCH then
-      -- TODO: check enabled
-      if sprite_size /= 0 then
-        next_state <= BLIT;
-      else
-        next_state <= INIT;
-      end if;
+      next_state <= BLIT;
     elsif state = BLIT then
       if blit_done = '1' then
-        next_state <= INIT;
+        next_state <= JUMP;
       end if;
+    elsif state = JUMP then
+      next_state <= INIT;
     end if;
   end process;
 
@@ -298,8 +282,10 @@ begin
   dest_pos.x <= resize(sprite.pos.x+src_pos.x, dest_pos.x'length);
   dest_pos.y <= resize(sprite.pos.y+src_pos.y, dest_pos.y'length);
 
-  -- the blit is done when all the sprite pixels have been copied
-  blit_done <= '1' when src_pos.x = sprite_size-1 and src_pos.y = sprite_size-1 else '0';
+  -- The blit is done when all the pixels have been copied, or the sprite has a zero size.
+  --
+  -- TODO: check enabled
+  blit_done <= '1' when (src_pos.x = sprite_size-1 and src_pos.y = sprite_size-1) or (sprite_size = 0) else '0';
 
   frame_buffer_addr_wr <= std_logic_vector(dest_pos.y(7 downto 0) & dest_pos.x(7 downto 0));
   frame_buffer_din <= (others => '1');
