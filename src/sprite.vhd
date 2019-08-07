@@ -256,40 +256,53 @@ begin
     end if;
   end process;
 
-  fsm_comb : process (state, sprite_size, blit_done)
+  fsm_comb : process (state, video_blank.vblank, sprite_size, blit_done)
   begin
     next_state <= state;
 
-    if state = INIT then
-      next_state <= LOAD;
-    elsif state = LOAD then
-      next_state <= LATCH;
-    elsif state = LATCH then
-      next_state <= CHECK;
-    elsif state = CHECK then
-      -- TODO: check enabled
-      if sprite_size /= 0 then
-        next_state <= BLIT;
-      else
-        next_state <= JUMP;
-      end if;
-    elsif state = BLIT then
-      if blit_done = '1' then
-        next_state <= JUMP;
-      end if;
-    elsif state = JUMP then
-      next_state <= INIT;
-    end if;
+    case state is
+      when INIT =>
+        if video_blank.vblank = '0' then
+          next_state <= LOAD;
+        end if;
+
+      when LOAD =>
+        next_state <= LATCH;
+
+      when LATCH =>
+        next_state <= CHECK;
+
+      when CHECK =>
+        -- TODO: check enabled
+        if sprite_size /= 0 then
+          next_state <= BLIT;
+        else
+          next_state <= JUMP;
+        end if;
+
+      when BLIT =>
+        if blit_done = '1' then
+          next_state <= JUMP;
+        end if;
+
+      when JUMP =>
+        if video_blank.vblank = '0' then
+          next_state <= LOAD;
+        else
+          next_state <= INIT;
+        end if;
+
+    end case;
   end process;
 
   -- set sprite size
   sprite_size <= to_unsigned(sprite_size_in_pixels(sprite.size), sprite_size'length);
 
-  -- TODO: handle flipping
+  -- TODO: handle X/Y axis flipping
   dest_pos.x <= resize(sprite.pos.x+src_pos.x, dest_pos.x'length);
   dest_pos.y <= resize(sprite.pos.y+src_pos.y, dest_pos.y'length);
 
-  -- The sprite has been blitted when all the pixels have been copied, or the sprite has a zero size.
+  -- The sprite has been blitted when all the pixels have been copied.
   blit_done <= '1' when src_pos.x = sprite_size-1 and src_pos.y = sprite_size-1 else '0';
 
   frame_buffer_addr_wr <= std_logic_vector(dest_pos.y(7 downto 0) & dest_pos.x(7 downto 0));
