@@ -135,6 +135,9 @@ architecture arch of sprite is
       when "11" => return 32;
     end case;
   end sprite_size_in_pixels;
+
+  attribute preserve : boolean;
+  attribute preserve of tile_rom_addr : signal is true;
 begin
   my_pll : entity pll.pll
   port map (
