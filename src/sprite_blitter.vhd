@@ -41,10 +41,13 @@ architecture arch of sprite_blitter is
   signal preload_done : std_logic;
   signal blit_done    : std_logic;
 
+  -- sprite signals
   signal sprite_size    : unsigned(5 downto 0);
   signal sprite_visible : std_logic;
 
+  -- graphics signals
   signal gfx_data : byte_t;
+  signal pixel    : nibble_t;
 
   -- calculate sprite size (8x8, 16x16, 32x32)
   function sprite_size_in_pixels(size : unsigned(1 downto 0)) return natural is
@@ -160,13 +163,19 @@ begin
     end if;
   end process;
 
+  -- write to the frame buffer when we're blitting to the visible part of the frame
+  busy <= '1' when state = BLIT and pixel /= "0000" and dest_pos.x(8) = '0' and dest_pos.y(8) = '0' else '0';
+
+  -- set done output
+  done <= '1' when state = INIT else '0';
+
   -- set sprite size
   sprite_size <= to_unsigned(sprite_size_in_pixels(sprite.size), sprite_size'length);
 
   -- the sprite is visible if it is enabled and has a non-zero size
   sprite_visible <= '1' when sprite.enable = '1' and sprite.size /= 0 else '0';
 
-  -- set tile ROM address
+  -- the source address
   src_addr <= std_logic_vector(
     sprite.code(9 downto 4) &
     (sprite.code(3 downto 0) or (load_pos.y(4) & load_pos.x(4) & load_pos.y(3) & load_pos.x(3))) &
@@ -181,21 +190,17 @@ begin
                 resize(sprite.pos.y-src_pos.y+sprite_size-1, dest_pos.y'length);
 
   -- the pre-blit is done when the first two pixels have been loaded
-  preload_done <= '1' when state = PRELOAD and load_pos.x = 1 else '0';
+  preload_done <= '1' when load_pos.x = 1 else '0';
 
   -- the blit is done when all the pixels have been copied
-  blit_done <= '1' when state = BLIT and src_pos.x = sprite_size-1 and src_pos.y = sprite_size-1 else '0';
+  blit_done <= '1' when src_pos.x = sprite_size-1 and src_pos.y = sprite_size-1 else '0';
 
-  -- set frame buffer write address
+  -- set destination address
   dest_addr <= std_logic_vector(dest_pos.y(7 downto 0) & dest_pos.x(7 downto 0));
 
-  -- set output data
-  dout <= (std_logic_vector(sprite.priority & sprite.color) & gfx_data(7 downto 4)) when src_pos.x(0) = '0' else
-          (std_logic_vector(sprite.priority & sprite.color) & gfx_data(3 downto 0));
+  -- set current pixel
+  pixel <= gfx_data(7 downto 4) when src_pos.x(0) = '0' else gfx_data(3 downto 0);
 
-  -- write to the frame buffer when we're blitting to the visible part of the frame
-  busy <= '1' when state = BLIT and dest_pos.x(8) = '0' and dest_pos.y(8) = '0' else '0';
-
-  -- set blit done output
-  done <= '1' when state = INIT else '0';
+  -- output
+  dout <= std_logic_vector(sprite.priority & sprite.color) & pixel;
 end arch;

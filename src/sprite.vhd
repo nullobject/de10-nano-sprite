@@ -15,8 +15,6 @@ entity sprite is
 end sprite;
 
 architecture arch of sprite is
-  constant MAX_SPRITES : natural := 3;
-
   type state_t is (INIT, LOAD, LATCH, BLIT, JUMP, DONE);
 
   signal state, next_state : state_t;
@@ -54,7 +52,7 @@ architecture arch of sprite is
 
   -- sprite signals
   signal sprite       : sprite_t;
-  signal sprite_index : unsigned(1 downto 0);
+  signal sprite_index : unsigned(1 downto 0) := (others => '1');
 
   -- control signals
   signal frame_done : std_logic;
@@ -186,7 +184,7 @@ begin
       when LATCH =>
         next_state <= BLIT;
 
-      -- blit the sprite to the frame buffer
+      -- blit the sprite
       when BLIT =>
         if blit_done = '1' then
           next_state <= JUMP;
@@ -209,12 +207,16 @@ begin
     end case;
   end process;
 
-  -- increment sprite index counter
+  -- Update the sprite index counter.
+  --
+  -- Sprites are sorted from highest to lowest priority, so we need to iterate
+  -- backwards to ensure that the sprites with the highest priority are drawn
+  -- last.
   sprite_index_counter : process (clk_12)
   begin
     if rising_edge(clk_12) then
       if state = JUMP then
-        sprite_index <= sprite_index + 1;
+        sprite_index <= sprite_index - 1;
       end if;
     end if;
   end process;
@@ -229,8 +231,8 @@ begin
     end if;
   end process;
 
-  -- enable the blitter
-  blit_enable : process (clk_12)
+  -- start the sprite blitter
+  blit_sprite : process (clk_12)
   begin
     if rising_edge(clk_12) then
       if state = LOAD then
@@ -260,7 +262,7 @@ begin
   sprite_ram_addr <= std_logic_vector(resize(sprite_index, sprite_ram_addr'length));
 
   -- the frame is done when all the sprites have been blitted
-  frame_done <= '1' when sprite_index = MAX_SPRITES else '0';
+  frame_done <= '1' when sprite_index = 0 else '0';
 
   -- set frame buffer read address
   frame_buffer_addr_rd <= std_logic_vector(video_pos.y(7 downto 0) & video_pos.x(7 downto 0));
