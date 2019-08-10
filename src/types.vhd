@@ -90,7 +90,7 @@ package types is
     flip_y   : std_logic;
     pos      : pos_t;
     priority : unsigned(1 downto 0);
-    size     : unsigned(1 downto 0);
+    size     : unsigned(5 downto 0);
   end record sprite_t;
 
   -- represents the position of a pixel in a sprite
@@ -101,26 +101,34 @@ package types is
 
   -- initialise sprite from a raw 64-bit value
   function init_sprite(data : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0)) return sprite_t;
-
-  -- calculate sprite size (8x8, 16x16, 32x32)
-  function sprite_size_in_pixels(size : unsigned(1 downto 0)) return natural;
 end package types;
 
 package body types is
+  -- calculate sprite size (8x8, 16x16, 32x32)
+  function sprite_size_in_pixels(size : std_logic_vector(1 downto 0)) return natural is
+  begin
+    case size is
+      when "00" => return 0;
+      when "01" => return 8;
+      when "10" => return 16;
+      when "11" => return 32;
+    end case;
+  end sprite_size_in_pixels;
+
   --  byte     bit        description
   -- --------+-76543210-+----------------
   --       0 | xxxx---- | hi code
   --         | -----x-- | enable
-  --         | ------x- | flip Y
-  --         | -------x | flip X
+  --         | ------x- | flip y
+  --         | -------x | flip x
   --       1 | xxxxxxxx | lo code
   --       2 | ------xx | size
   --       3 | xx-------| priority
-  --         | --x----- | hi pos Y
-  --         | ---x---- | hi pos X
+  --         | --x----- | hi pos y
+  --         | ---x---- | hi pos x
   --         | ----xxxx | colour
-  --       4 | xxxxxxxx | lo pos Y
-  --       5 | xxxxxxxx | lo pos X
+  --       4 | xxxxxxxx | lo pos y
+  --       5 | xxxxxxxx | lo pos x
   --       6 | -------- |
   --       7 | -------- |
   function init_sprite(data : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0)) return sprite_t is
@@ -134,17 +142,7 @@ package body types is
     sprite.pos.x    := data(SPRITE_HI_POS_X_BIT) & unsigned(data(SPRITE_LO_POS_X_MSB downto SPRITE_LO_POS_X_LSB));
     sprite.pos.y    := data(SPRITE_HI_POS_Y_BIT) & unsigned(data(SPRITE_LO_POS_Y_MSB downto SPRITE_LO_POS_Y_LSB));
     sprite.priority := unsigned(data(SPRITE_PRIORITY_MSB downto SPRITE_PRIORITY_LSB));
-    sprite.size     := unsigned(data(SPRITE_SIZE_MSB downto SPRITE_SIZE_LSB));
+    sprite.size     := to_unsigned(sprite_size_in_pixels(data(SPRITE_SIZE_MSB downto SPRITE_SIZE_LSB)), sprite.size'length);
     return sprite;
   end init_sprite;
-
-  function sprite_size_in_pixels(size : unsigned(1 downto 0)) return natural is
-  begin
-    case size is
-      when "00" => return 0;
-      when "01" => return 8;
-      when "10" => return 16;
-      when "11" => return 32;
-    end case;
-  end sprite_size_in_pixels;
 end package body types;

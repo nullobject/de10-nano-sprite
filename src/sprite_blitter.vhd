@@ -40,10 +40,7 @@ architecture arch of sprite_blitter is
   -- control signals
   signal preload_done : std_logic;
   signal blit_done    : std_logic;
-
-  -- sprite signals
-  signal sprite_size    : unsigned(5 downto 0);
-  signal sprite_visible : std_logic;
+  signal visible      : std_logic;
 
   -- graphics signals
   signal gfx_data : byte_t;
@@ -71,7 +68,7 @@ begin
 
       -- check whether the sprite is visible before we bother to render it
       when CHECK =>
-        if sprite_visible = '1' then
+        if visible = '1' then
           next_state <= PRELOAD;
         else
           next_state <= INIT;
@@ -102,10 +99,10 @@ begin
         src_pos.x <= (others => '0');
         src_pos.y <= (others => '0');
       elsif state = BLIT then
-        if src_pos.x = sprite_size-1 then
+        if src_pos.x = sprite.size-1 then
           src_pos.x <= (others => '0');
 
-          if src_pos.y = sprite_size-1 then
+          if src_pos.y = sprite.size-1 then
             src_pos.y <= (others => '0');
           else
             src_pos.y <= src_pos.y + 1;
@@ -126,10 +123,10 @@ begin
         load_pos.x <= (others => '0');
         load_pos.y <= (others => '0');
       elsif state = PRELOAD or state = BLIT then
-        if load_pos.x = sprite_size-1 then
+        if load_pos.x = sprite.size-1 then
           load_pos.x <= (others => '0');
 
-          if load_pos.y = sprite_size-1 then
+          if load_pos.y = sprite.size-1 then
             load_pos.y <= (others => '0');
           else
             load_pos.y <= load_pos.y + 1;
@@ -158,11 +155,8 @@ begin
   -- set done output
   done <= '1' when state = INIT else '0';
 
-  -- set sprite size
-  sprite_size <= to_unsigned(sprite_size_in_pixels(sprite.size), sprite_size'length);
-
   -- the sprite is visible if it is enabled and has a non-zero size
-  sprite_visible <= '1' when sprite.enable = '1' and sprite.size /= 0 else '0';
+  visible <= '1' when sprite.enable = '1' and sprite.size /= 0 else '0';
 
   -- the source address
   src_addr <= std_logic_vector(
@@ -174,15 +168,15 @@ begin
 
   -- set destination position and handle X/Y axis flipping
   dest_pos.x <= resize(sprite.pos.x+src_pos.x, dest_pos.x'length) when sprite.flip_x = '0' else
-                resize(sprite.pos.x-src_pos.x+sprite_size-1, dest_pos.x'length);
+                resize(sprite.pos.x-src_pos.x+sprite.size-1, dest_pos.x'length);
   dest_pos.y <= resize(sprite.pos.y+src_pos.y, dest_pos.y'length) when sprite.flip_y = '0' else
-                resize(sprite.pos.y-src_pos.y+sprite_size-1, dest_pos.y'length);
+                resize(sprite.pos.y-src_pos.y+sprite.size-1, dest_pos.y'length);
 
   -- the pre-blit is done when the first two pixels have been loaded
   preload_done <= '1' when load_pos.x = 1 else '0';
 
   -- the blit is done when all the pixels have been copied
-  blit_done <= '1' when src_pos.x = sprite_size-1 and src_pos.y = sprite_size-1 else '0';
+  blit_done <= '1' when src_pos.x = sprite.size-1 and src_pos.y = sprite.size-1 else '0';
 
   -- set destination address
   dest_addr <= std_logic_vector(dest_pos.y(7 downto 0) & dest_pos.x(7 downto 0));
