@@ -17,8 +17,8 @@ entity sprite_blitter is
     din      : in byte_t;
 
     -- data out
-    dest_addr : out std_logic_vector(15 downto 0);
-    dout      : out std_logic_vector(7 downto 0);
+    dest_addr : out std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
+    dout      : out std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0);
 
     -- control signals
     start : in std_logic;
@@ -174,7 +174,7 @@ begin
     load_pos.x(2 downto 1)
   );
 
-  -- set destination position and handle flipping
+  -- set destination position and handle X/Y axis flipping
   dest_pos.x <= resize(sprite.pos.x+src_pos.x, dest_pos.x'length) when sprite.flip_x = '0' else
                 resize(sprite.pos.x-src_pos.x+sprite.size, dest_pos.x'length);
   dest_pos.y <= resize(sprite.pos.y+src_pos.y, dest_pos.y'length) when sprite.flip_y = '0' else
@@ -189,8 +189,9 @@ begin
   -- set frame buffer write address
   dest_addr <= std_logic_vector(dest_pos.y(7 downto 0) & dest_pos.x(7 downto 0));
 
-  -- TODO: handle priority and colour
-  dout <= ("0000" & gfx_data(7 downto 4)) when src_pos.x(0) = '0' else ("0000" & gfx_data(3 downto 0));
+  -- set output data
+  dout <= (std_logic_vector(sprite.priority & sprite.color) & gfx_data(7 downto 4)) when src_pos.x(0) = '0' else
+          (std_logic_vector(sprite.priority & sprite.color) & gfx_data(3 downto 0));
 
   -- write to the frame buffer when we're blitting to the visible part of the frame
   busy <= '1' when state = BLIT and dest_pos.x(8) = '0' and dest_pos.y(8) = '0' else '0';

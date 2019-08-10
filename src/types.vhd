@@ -26,7 +26,9 @@ package types is
   subtype byte_t is std_logic_vector(7 downto 0);
   subtype nibble_t is std_logic_vector(3 downto 0);
 
-  constant TILE_ROM_ADDR_WIDTH : natural := 15;
+  constant TILE_ROM_ADDR_WIDTH     : natural := 15;
+  constant FRAME_BUFFER_ADDR_WIDTH : natural := 16;
+  constant FRAME_BUFFER_DATA_WIDTH : natural := 10;
 
   -- represents a position
   type pos_t is record
@@ -48,12 +50,14 @@ package types is
 
   -- represents a sprite
   type sprite_t is record
-    code   : unsigned(11 downto 0);
-    enable : std_logic;
-    flip_x : std_logic;
-    flip_y : std_logic;
-    pos    : pos_t;
-    size   : unsigned(1 downto 0);
+    code     : unsigned(11 downto 0);
+    color    : unsigned(3 downto 0);
+    enable   : std_logic;
+    flip_x   : std_logic;
+    flip_y   : std_logic;
+    pos      : pos_t;
+    priority : unsigned(1 downto 0);
+    size     : unsigned(1 downto 0);
   end record sprite_t;
 
   -- represents the position of a pixel in a sprite

@@ -42,10 +42,10 @@ architecture arch of sprite is
   signal vblank_falling : std_logic;
 
   -- frame buffer
-  signal frame_buffer_addr_rd : std_logic_vector(15 downto 0);
-  signal frame_buffer_addr_wr : std_logic_vector(15 downto 0);
-  signal frame_buffer_din     : std_logic_vector(7 downto 0);
-  signal frame_buffer_dout    : std_logic_vector(7 downto 0);
+  signal frame_buffer_addr_rd : std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
+  signal frame_buffer_addr_wr : std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
+  signal frame_buffer_din     : std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0);
+  signal frame_buffer_dout    : std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0);
   signal frame_buffer_flip    : std_logic;
   signal frame_buffer_rden    : std_logic;
   signal frame_buffer_wren    : std_logic;
@@ -100,13 +100,13 @@ architecture arch of sprite is
     variable sprite : sprite_t;
   begin
     sprite.code     := unsigned(data(SPRITE_HI_CODE_MSB downto SPRITE_HI_CODE_LSB)) & unsigned(data(SPRITE_LO_CODE_MSB downto SPRITE_LO_CODE_LSB));
-    -- sprite.color    := unsigned(data(SPRITE_COLOR_MSB downto SPRITE_COLOR_LSB));
+    sprite.color    := unsigned(data(SPRITE_COLOR_MSB downto SPRITE_COLOR_LSB));
     sprite.enable   := data(SPRITE_ENABLE_BIT);
     sprite.flip_x   := data(SPRITE_FLIP_X_BIT);
     sprite.flip_y   := data(SPRITE_FLIP_Y_BIT);
     sprite.pos.x    := data(SPRITE_HI_POS_X_BIT) & unsigned(data(SPRITE_LO_POS_X_MSB downto SPRITE_LO_POS_X_LSB));
     sprite.pos.y    := data(SPRITE_HI_POS_Y_BIT) & unsigned(data(SPRITE_LO_POS_Y_MSB downto SPRITE_LO_POS_Y_LSB));
-    -- sprite.priority := unsigned(data(SPRITE_PRIORITY_MSB downto SPRITE_PRIORITY_LSB));
+    sprite.priority := unsigned(data(SPRITE_PRIORITY_MSB downto SPRITE_PRIORITY_LSB));
     sprite.size     := unsigned(data(SPRITE_SIZE_MSB downto SPRITE_SIZE_LSB));
 
     return sprite;
@@ -168,7 +168,7 @@ begin
   );
 
   sprite_frame_buffer : entity work.frame_buffer
-  generic map (ADDR_WIDTH => 16, DATA_WIDTH => 8)
+  generic map (ADDR_WIDTH => FRAME_BUFFER_ADDR_WIDTH, DATA_WIDTH => FRAME_BUFFER_DATA_WIDTH)
   port map (
     clk  => clk_12,
     flip => frame_buffer_flip,
