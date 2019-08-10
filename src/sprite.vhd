@@ -17,8 +17,9 @@ end sprite;
 architecture arch of sprite is
   constant SPRITE_RAM_ADDR_WIDTH : natural := 4;
   constant SPRITE_RAM_DATA_WIDTH : natural := 64;
+  constant TILE_ROM_ADDR_WIDTH   : natural := 15;
 
-  type state_t is (INIT, LOAD, LATCH, CHECK, BLIT, JUMP);
+  type state_t is (INIT, LOAD, LATCH, CHECK, PRE_BLIT, BLIT, JUMP);
 
   type sprite_pos_t is record
     x : unsigned(4 downto 0);
@@ -31,9 +32,13 @@ architecture arch of sprite is
   signal clk_12 : std_logic;
   signal cen_6  : std_logic;
 
-  -- RAM signals
+  -- sprite RAM signals
   signal sprite_ram_addr : std_logic_vector(SPRITE_RAM_ADDR_WIDTH-1 downto 0);
   signal sprite_ram_dout : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0);
+
+  -- tile ROM signals
+  signal tile_rom_addr : std_logic_vector(TILE_ROM_ADDR_WIDTH-1 downto 0);
+  signal tile_rom_dout : byte_t;
 
   -- video signals
   signal video_pos   : pos_t;
@@ -53,19 +58,23 @@ architecture arch of sprite is
 
   -- position signals
   signal src_pos  : sprite_pos_t;
+  signal load_pos : sprite_pos_t;
   signal dest_pos : pos_t;
 
-  -- sprite size in pixels
-  signal sprite_size : unsigned(5 downto 0);
-
   -- control signals
-  signal blit_done : std_logic;
+  signal pre_blit_done : std_logic;
+  signal blit_done     : std_logic;
 
   -- pixel data
   signal pixel : nibble_t;
 
-  -- sprite data
-  signal sprite : sprite_t;
+  -- sprite signals
+  signal sprite         : sprite_t;
+  signal sprite_size    : unsigned(5 downto 0);
+  signal sprite_visible : std_logic;
+
+  -- graphics data
+  signal gfx_data : byte_t;
 
   signal sprite_index : unsigned(1 downto 0);
 
@@ -104,7 +113,7 @@ architecture arch of sprite is
   function init_sprite(data : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0)) return sprite_t is
     variable sprite : sprite_t;
   begin
-    -- sprite.code     := unsigned(data(SPRITE_HI_CODE_MSB downto SPRITE_HI_CODE_LSB)) & unsigned(data(SPRITE_LO_CODE_MSB downto SPRITE_LO_CODE_LSB));
+    sprite.code     := unsigned(data(SPRITE_HI_CODE_MSB downto SPRITE_HI_CODE_LSB)) & unsigned(data(SPRITE_LO_CODE_MSB downto SPRITE_LO_CODE_LSB));
     -- sprite.color    := unsigned(data(SPRITE_COLOR_MSB downto SPRITE_COLOR_LSB));
     -- sprite.enable   := data(SPRITE_ENABLE_BIT);
     -- sprite.flip_x   := data(SPRITE_FLIP_X_BIT);
@@ -127,6 +136,13 @@ architecture arch of sprite is
       when "11" => return 32;
     end case;
   end sprite_size_in_pixels;
+
+  -- XXX: for debugging
+  attribute preserve : boolean;
+  attribute keep : boolean;
+  attribute preserve of tile_rom_addr : signal is true;
+  attribute keep of pre_blit_done : signal is true;
+  attribute keep of blit_done : signal is true;
 begin
   my_pll : entity pll.pll
   port map (
@@ -152,15 +168,28 @@ begin
 
   sprite_ram : entity work.single_port_rom
   generic map (
-    ADDR_WIDTH         => SPRITE_RAM_ADDR_WIDTH,
-    DATA_WIDTH         => SPRITE_RAM_DATA_WIDTH,
-    INIT_FILE          => "rom/sprites.mif",
+    ADDR_WIDTH => SPRITE_RAM_ADDR_WIDTH,
+    DATA_WIDTH => SPRITE_RAM_DATA_WIDTH,
+    INIT_FILE  => "rom/sprites.mif",
+
+    -- XXX: for debugging
     ENABLE_RUNTIME_MOD => "YES"
   )
   port map (
     clk  => clk_12,
     addr => sprite_ram_addr,
     dout => sprite_ram_dout
+  );
+
+  tile_rom : entity work.single_port_rom
+  generic map (
+    ADDR_WIDTH => TILE_ROM_ADDR_WIDTH,
+    INIT_FILE  => "rom/vid_6g.mif"
+  )
+  port map (
+    clk  => clk_12,
+    addr => tile_rom_addr,
+    dout => tile_rom_dout
   );
 
   sprite_frame_buffer : entity work.frame_buffer
@@ -188,6 +217,8 @@ begin
     edge => vblank_falling
   );
 
+  -- XXX: Can this be handled by the FSM? That way we wouldn't need the VBLANK
+  -- edge detector.
   page_flipper : process (clk_12)
   begin
     if rising_edge(clk_12) then
@@ -197,6 +228,7 @@ begin
     end if;
   end process;
 
+  -- increment sprite index counter
   sprite_index_counter : process (clk_12)
   begin
     if rising_edge(clk_12) then
@@ -206,14 +238,16 @@ begin
     end if;
   end process;
 
-  -- sprite pixel counters
-  pixel_counters : process (clk_12)
+  -- the source position represents the current pixel offset of the sprite to
+  -- be copied to the frame buffer
+  src_pos_counter : process (clk_12)
   begin
     if rising_edge(clk_12) then
-      if state /= BLIT then
+      if state = CHECK then
+        -- set source position to first pixel
         src_pos.x <= (others => '0');
         src_pos.y <= (others => '0');
-      else
+      elsif state = BLIT then
         if src_pos.x = sprite_size-1 then
           src_pos.x <= (others => '0');
 
@@ -229,17 +263,31 @@ begin
     end if;
   end process;
 
-  -- load sprite from RAM
-  load_sprite : process (clk_12)
+  -- the load position represents the position of the next pixel to be loaded
+  load_pos_counter : process (clk_12)
   begin
     if rising_edge(clk_12) then
-      if state = LOAD then
-        sprite_ram_addr <= std_logic_vector(resize(sprite_index, sprite_ram_addr'length));
+      if state = CHECK then
+        -- set load position to first pixel
+        load_pos.x <= (others => '0');
+        load_pos.y <= (others => '0');
+      elsif state = PRE_BLIT or state = BLIT then
+        if load_pos.x = sprite_size-1 then
+          load_pos.x <= (others => '0');
+
+          if load_pos.y = sprite_size-1 then
+            load_pos.y <= (others => '0');
+          else
+            load_pos.y <= load_pos.y + 1;
+          end if;
+        else
+          load_pos.x <= load_pos.x + 1;
+        end if;
       end if;
     end if;
   end process;
 
-  -- latch sprite from RAM
+  -- latch sprite from the sprite RAM
   latch_sprite : process (clk_12)
   begin
     if rising_edge(clk_12) then
@@ -249,87 +297,137 @@ begin
     end if;
   end process;
 
-  fsm_sync : process (clk_12)
+  -- latch fresh graphics data from the tile ROM while we are blitting the odd
+  -- pixels to the frame buffer
+  latch_gfx_data : process (clk_12)
+  begin
+    if rising_edge(clk_12) then
+      if (state = PRE_BLIT or state = BLIT) and load_pos.x(0) = '1' then
+        gfx_data <= tile_rom_dout;
+      end if;
+    end if;
+  end process;
+
+  -- latch the next state
+  latch_state : process (clk_12)
   begin
     if rising_edge(clk_12) then
       state <= next_state;
     end if;
   end process;
 
-  fsm_comb : process (state, video_blank.vblank, sprite_size, blit_done)
+  -- state machine
+  fsm : process (state, video_blank.vblank, pre_blit_done, blit_done)
   begin
     next_state <= state;
 
     case state is
       when INIT =>
         if video_blank.vblank = '0' then
+          -- if we're not in a vertical blank, then load the sprite
           next_state <= LOAD;
         end if;
 
       when LOAD =>
+        -- latch the sprite
         next_state <= LATCH;
 
       when LATCH =>
+        -- check the sprite
         next_state <= CHECK;
 
       when CHECK =>
-        -- TODO: check enabled
-        if sprite_size /= 0 then
-          next_state <= BLIT;
+        if sprite_visible = '1' then
+          -- if the sprite is visible on the screen, then blit it
+          next_state <= PRE_BLIT;
         else
+          -- otherwise, skip to the next sprite
           next_state <= JUMP;
+        end if;
+
+      when PRE_BLIT =>
+        if pre_blit_done = '1' then
+          -- if the pre-blit is done, then start the blit
+          next_state <= BLIT;
         end if;
 
       when BLIT =>
         if blit_done = '1' then
+          -- if the blit is done, then skip to the next sprite
           next_state <= JUMP;
         end if;
 
       when JUMP =>
         if video_blank.vblank = '0' then
+          -- if we're not in a vertical blank, then load the next sprite
           next_state <= LOAD;
         else
+          -- otherwise, wait for the next frame to start
           next_state <= INIT;
         end if;
 
     end case;
   end process;
 
+  -- set sprite RAM address
+  sprite_ram_addr <= std_logic_vector(resize(sprite_index, sprite_ram_addr'length));
+
   -- set sprite size
   sprite_size <= to_unsigned(sprite_size_in_pixels(sprite.size), sprite_size'length);
+
+  -- set sprite visible
+  -- TODO: check sprite is enabled
+  sprite_visible <= '1' when sprite_size /= 0 else '0';
+
+  -- set tile ROM address
+  tile_rom_addr <= std_logic_vector(
+    sprite.code(9 downto 4) &
+    (sprite.code(3 downto 0) or (load_pos.y(4) & load_pos.x(4) & load_pos.y(3) & load_pos.x(3))) &
+    load_pos.y(2 downto 0) &
+    load_pos.x(2 downto 1)
+  );
 
   -- TODO: handle X/Y axis flipping
   dest_pos.x <= resize(sprite.pos.x+src_pos.x, dest_pos.x'length);
   dest_pos.y <= resize(sprite.pos.y+src_pos.y, dest_pos.y'length);
 
-  -- The sprite has been blitted when all the pixels have been copied.
-  blit_done <= '1' when src_pos.x = sprite_size-1 and src_pos.y = sprite_size-1 else '0';
+  -- the pre-blit is done when the first two pixels have been loaded
+  pre_blit_done <= '1' when state = PRE_BLIT and load_pos.x = 1 else '0';
 
+  -- the blit is done when all the pixels have been copied
+  blit_done <= '1' when state = BLIT and src_pos.x = sprite_size-1 and src_pos.y = sprite_size-1 else '0';
+
+  -- set frame buffer write address
   frame_buffer_addr_wr <= std_logic_vector(dest_pos.y(7 downto 0) & dest_pos.x(7 downto 0));
-  frame_buffer_din <= (others => '1');
+
+  -- TODO: handle priority and colour
+  frame_buffer_din <= ("0000" & gfx_data(7 downto 4)) when src_pos.x(0) = '0' else ("0000" & gfx_data(3 downto 0));
+
+  -- write to the frame buffer when we're blitting to the visible part of the frame
   frame_buffer_wren <= '1' when state = BLIT and dest_pos.x(8) = '0' and dest_pos.y(8) = '0' else '0';
 
+  -- set frame buffer read address
   frame_buffer_addr_rd <= std_logic_vector(video_pos.y(7 downto 0) & video_pos.x(7 downto 0));
+
+  -- read from the frame buffer when video output is enabled
   frame_buffer_rden <= not (video_blank.hblank or video_blank.vblank);
 
-  pixel <= frame_buffer_dout(7 downto 4);
+  pixel <= frame_buffer_dout(3 downto 0);
 
   video_on <= not (video_blank.hblank or video_blank.vblank);
   vga_csync <= not (video_sync.hsync xor video_sync.vsync);
 
   video_output : process (clk_12)
   begin
-    if rising_edge(clk_12) then
-      if cen_6 = '1' then
-        if video_on = '1' then
-          vga_r <= pixel & pixel(3 downto 2);
-          vga_g <= pixel & pixel(3 downto 2);
-          vga_b <= pixel & pixel(3 downto 2);
-        else
-          vga_r <= (others => '0');
-          vga_g <= (others => '0');
-          vga_b <= (others => '0');
-        end if;
+    if rising_edge(clk_12) and cen_6 = '1' then
+      if video_on = '1' then
+        vga_r <= pixel & pixel(3 downto 2);
+        vga_g <= pixel & pixel(3 downto 2);
+        vga_b <= pixel & pixel(3 downto 2);
+      else
+        vga_r <= (others => '0');
+        vga_g <= (others => '0');
+        vga_b <= (others => '0');
       end if;
     end if;
   end process;
