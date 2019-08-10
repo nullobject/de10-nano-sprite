@@ -50,6 +50,8 @@ package types is
   type sprite_t is record
     code   : unsigned(11 downto 0);
     enable : std_logic;
+    flip_x : std_logic;
+    flip_y : std_logic;
     pos    : pos_t;
     size   : unsigned(1 downto 0);
   end record sprite_t;

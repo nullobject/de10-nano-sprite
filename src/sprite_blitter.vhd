@@ -174,9 +174,11 @@ begin
     load_pos.x(2 downto 1)
   );
 
-  -- TODO: handle X/Y axis flipping
-  dest_pos.x <= resize(sprite.pos.x+src_pos.x, dest_pos.x'length);
-  dest_pos.y <= resize(sprite.pos.y+src_pos.y, dest_pos.y'length);
+  -- set destination position and handle flipping
+  dest_pos.x <= resize(sprite.pos.x+src_pos.x, dest_pos.x'length) when sprite.flip_x = '0' else
+                resize(sprite.pos.x-src_pos.x+sprite.size, dest_pos.x'length);
+  dest_pos.y <= resize(sprite.pos.y+src_pos.y, dest_pos.y'length) when sprite.flip_y = '0' else
+                resize(sprite.pos.y-src_pos.y+sprite.size, dest_pos.y'length);
 
   -- the pre-blit is done when the first two pixels have been loaded
   preload_done <= '1' when state = PRELOAD and load_pos.x = 1 else '0';

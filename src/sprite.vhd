@@ -102,8 +102,8 @@ architecture arch of sprite is
     sprite.code     := unsigned(data(SPRITE_HI_CODE_MSB downto SPRITE_HI_CODE_LSB)) & unsigned(data(SPRITE_LO_CODE_MSB downto SPRITE_LO_CODE_LSB));
     -- sprite.color    := unsigned(data(SPRITE_COLOR_MSB downto SPRITE_COLOR_LSB));
     sprite.enable   := data(SPRITE_ENABLE_BIT);
-    -- sprite.flip_x   := data(SPRITE_FLIP_X_BIT);
-    -- sprite.flip_y   := data(SPRITE_FLIP_Y_BIT);
+    sprite.flip_x   := data(SPRITE_FLIP_X_BIT);
+    sprite.flip_y   := data(SPRITE_FLIP_Y_BIT);
     sprite.pos.x    := data(SPRITE_HI_POS_X_BIT) & unsigned(data(SPRITE_LO_POS_X_MSB downto SPRITE_LO_POS_X_LSB));
     sprite.pos.y    := data(SPRITE_HI_POS_Y_BIT) & unsigned(data(SPRITE_LO_POS_Y_MSB downto SPRITE_LO_POS_Y_LSB));
     -- sprite.priority := unsigned(data(SPRITE_PRIORITY_MSB downto SPRITE_PRIORITY_LSB));
