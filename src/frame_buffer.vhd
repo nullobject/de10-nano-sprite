@@ -26,17 +26,15 @@ use ieee.numeric_std.all;
 -- used by the sprite renderer to ensure glitch-free graphics.
 --
 -- Internally, it contains two memory pages which are accessed alternately for
--- reading and writing, so that while on page is being written to, the other is
--- being read from.
+-- reading and writing, so that while one page is being written to, the other
+-- is being read from.
 --
--- When the pages are flipped, the page that was previously being written to
--- will be read from, and the page that was being read from will be written to.
+-- When the flip signal is asserted, the pages are swapped. The page that was
+-- previously being written to will be read from, and the page that was being
+-- read from will be written to.
 --
--- The frame buffer interface provides two ports: a read-only port, and
--- a write-only port.
---
--- TODO: When a location is read, it should be cleared to zero. That way the
--- page will already be empty when it is flipped.
+-- The frame buffer automatically clears pixels during read operations, so that
+-- the write page is clean when it is flipped.
 entity frame_buffer is
   generic (
     ADDR_WIDTH : natural := 8;

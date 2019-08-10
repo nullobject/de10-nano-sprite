@@ -4,6 +4,15 @@ use ieee.numeric_std.all;
 
 use work.types.all;
 
+-- The sprite blitter copies sprite data from the tile ROM to the frame buffer.
+--
+-- A blit operation is triggered by setting the sprite descriptor and asserting
+-- the start signal. Once all the pixels have been copied to the frame buffer,
+-- the done signal is asserted by the sprite blitter.
+--
+-- The busy signal is asserted while the sprite blitter is writing pixel data
+-- to the frame buffer. This signal should be used to enable write access to
+-- the frame buffer.
 entity sprite_blitter is
   port (
     -- clock
