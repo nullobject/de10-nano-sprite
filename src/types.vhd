@@ -48,9 +48,10 @@ package types is
 
   -- represents a sprite
   type sprite_t is record
-    code : unsigned(11 downto 0);
-    pos  : pos_t;
-    size : unsigned(1 downto 0);
+    code   : unsigned(11 downto 0);
+    enable : std_logic;
+    pos    : pos_t;
+    size   : unsigned(1 downto 0);
   end record sprite_t;
 
   -- represents the position of a pixel in a sprite

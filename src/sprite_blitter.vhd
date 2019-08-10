@@ -163,9 +163,8 @@ begin
   -- set sprite size
   sprite_size <= to_unsigned(sprite_size_in_pixels(sprite.size), sprite_size'length);
 
-  -- set sprite visible
-  -- TODO: check sprite is enabled
-  sprite_visible <= '1' when sprite.size /= 0 else '0';
+  -- the sprite is visible if it is enabled and has a non-zero size
+  sprite_visible <= '1' when sprite.enable = '1' and sprite.size /= 0 else '0';
 
   -- set tile ROM address
   src_addr <= std_logic_vector(
