@@ -29,6 +29,39 @@ package types is
   constant TILE_ROM_ADDR_WIDTH     : natural := 15;
   constant FRAME_BUFFER_ADDR_WIDTH : natural := 16;
   constant FRAME_BUFFER_DATA_WIDTH : natural := 10;
+  constant SPRITE_RAM_ADDR_WIDTH   : natural := 4;
+  constant SPRITE_RAM_DATA_WIDTH   : natural := 64;
+
+  -- byte 0
+  constant SPRITE_HI_CODE_MSB : natural := 7;
+  constant SPRITE_HI_CODE_LSB : natural := 4;
+  constant SPRITE_ENABLE_BIT  : natural := 2;
+  constant SPRITE_FLIP_Y_BIT  : natural := 1;
+  constant SPRITE_FLIP_X_BIT  : natural := 0;
+
+  -- byte 1
+  constant SPRITE_LO_CODE_MSB : natural := 15;
+  constant SPRITE_LO_CODE_LSB : natural := 8;
+
+  -- byte 2
+  constant SPRITE_SIZE_MSB : natural := 17;
+  constant SPRITE_SIZE_LSB : natural := 16;
+
+  -- byte 3
+  constant SPRITE_PRIORITY_MSB : natural := 31;
+  constant SPRITE_PRIORITY_LSB : natural := 30;
+  constant SPRITE_HI_POS_Y_BIT : natural := 29;
+  constant SPRITE_HI_POS_X_BIT : natural := 28;
+  constant SPRITE_COLOR_MSB    : natural := 27;
+  constant SPRITE_COLOR_LSB    : natural := 24;
+
+  -- byte 4
+  constant SPRITE_LO_POS_Y_MSB : natural := 39;
+  constant SPRITE_LO_POS_Y_LSB : natural := 32;
+
+  -- byte 5
+  constant SPRITE_LO_POS_X_MSB : natural := 47;
+  constant SPRITE_LO_POS_X_LSB : natural := 40;
 
   -- represents a position
   type pos_t is record
@@ -65,4 +98,41 @@ package types is
     x : unsigned(4 downto 0);
     y : unsigned(4 downto 0);
   end record sprite_pos_t;
+
+  -- initialise sprite from a raw 64-bit value
+  function init_sprite(data : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0)) return sprite_t;
 end package types;
+
+package body types is
+  --  byte     bit        description
+  -- --------+-76543210-+----------------
+  --       0 | xxxx---- | hi code
+  --         | -----x-- | enable
+  --         | ------x- | flip Y
+  --         | -------x | flip X
+  --       1 | xxxxxxxx | lo code
+  --       2 | ------xx | size
+  --       3 | xx-------| priority
+  --         | --x----- | hi pos Y
+  --         | ---x---- | hi pos X
+  --         | ----xxxx | colour
+  --       4 | xxxxxxxx | lo pos Y
+  --       5 | xxxxxxxx | lo pos X
+  --       6 | -------- |
+  --       7 | -------- |
+  function init_sprite(data : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0)) return sprite_t is
+    variable sprite : sprite_t;
+  begin
+    sprite.code     := unsigned(data(SPRITE_HI_CODE_MSB downto SPRITE_HI_CODE_LSB)) & unsigned(data(SPRITE_LO_CODE_MSB downto SPRITE_LO_CODE_LSB));
+    sprite.color    := unsigned(data(SPRITE_COLOR_MSB downto SPRITE_COLOR_LSB));
+    sprite.enable   := data(SPRITE_ENABLE_BIT);
+    sprite.flip_x   := data(SPRITE_FLIP_X_BIT);
+    sprite.flip_y   := data(SPRITE_FLIP_Y_BIT);
+    sprite.pos.x    := data(SPRITE_HI_POS_X_BIT) & unsigned(data(SPRITE_LO_POS_X_MSB downto SPRITE_LO_POS_X_LSB));
+    sprite.pos.y    := data(SPRITE_HI_POS_Y_BIT) & unsigned(data(SPRITE_LO_POS_Y_MSB downto SPRITE_LO_POS_Y_LSB));
+    sprite.priority := unsigned(data(SPRITE_PRIORITY_MSB downto SPRITE_PRIORITY_LSB));
+    sprite.size     := unsigned(data(SPRITE_SIZE_MSB downto SPRITE_SIZE_LSB));
+
+    return sprite;
+  end init_sprite;
+end package body types;
