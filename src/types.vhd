@@ -101,6 +101,9 @@ package types is
 
   -- initialise sprite from a raw 64-bit value
   function init_sprite(data : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0)) return sprite_t;
+
+  -- calculate sprite size (8x8, 16x16, 32x32)
+  function sprite_size_in_pixels(size : unsigned(1 downto 0)) return natural;
 end package types;
 
 package body types is
@@ -132,7 +135,16 @@ package body types is
     sprite.pos.y    := data(SPRITE_HI_POS_Y_BIT) & unsigned(data(SPRITE_LO_POS_Y_MSB downto SPRITE_LO_POS_Y_LSB));
     sprite.priority := unsigned(data(SPRITE_PRIORITY_MSB downto SPRITE_PRIORITY_LSB));
     sprite.size     := unsigned(data(SPRITE_SIZE_MSB downto SPRITE_SIZE_LSB));
-
     return sprite;
   end init_sprite;
+
+  function sprite_size_in_pixels(size : unsigned(1 downto 0)) return natural is
+  begin
+    case size is
+      when "00" => return 0;
+      when "01" => return 8;
+      when "10" => return 16;
+      when "11" => return 32;
+    end case;
+  end sprite_size_in_pixels;
 end package body types;

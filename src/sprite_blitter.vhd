@@ -48,17 +48,6 @@ architecture arch of sprite_blitter is
   -- graphics signals
   signal gfx_data : byte_t;
   signal pixel    : nibble_t;
-
-  -- calculate sprite size (8x8, 16x16, 32x32)
-  function sprite_size_in_pixels(size : unsigned(1 downto 0)) return natural is
-  begin
-    case size is
-      when "00" => return 0;
-      when "01" => return 8;
-      when "10" => return 16;
-      when "11" => return 32;
-    end case;
-  end sprite_size_in_pixels;
 begin
   -- latch the next state
   latch_state : process (clk)
