@@ -26,7 +26,9 @@ package types is
   subtype byte_t is std_logic_vector(7 downto 0);
   subtype nibble_t is std_logic_vector(3 downto 0);
 
-  -- represents a 2D position
+  constant TILE_ROM_ADDR_WIDTH : natural := 15;
+
+  -- represents a position
   type pos_t is record
     x : unsigned(8 downto 0);
     y : unsigned(8 downto 0);
@@ -50,4 +52,10 @@ package types is
     pos  : pos_t;
     size : unsigned(1 downto 0);
   end record sprite_t;
+
+  -- represents the position of a pixel in a sprite
+  type sprite_pos_t is record
+    x : unsigned(4 downto 0);
+    y : unsigned(4 downto 0);
+  end record sprite_pos_t;
 end package types;
