@@ -15,7 +15,9 @@ entity sprite is
 end sprite;
 
 architecture arch of sprite is
-  type state_t is (INIT, LOAD, LATCH, BLIT, JUMP);
+  constant MAX_SPRITES : natural := 3;
+
+  type state_t is (INIT, LOAD, LATCH, BLIT, JUMP, DONE);
 
   signal state, next_state : state_t;
 
@@ -54,16 +56,10 @@ architecture arch of sprite is
   signal sprite       : sprite_t;
   signal sprite_index : unsigned(1 downto 0);
 
-  -- sprite blitter
-  signal sprite_blitter_start : std_logic;
-  signal sprite_blitter_done  : std_logic;
-
-  -- XXX: for debugging
-  attribute preserve : boolean;
-  attribute preserve of tile_rom_addr : signal is true;
-  attribute keep : boolean;
-  attribute keep of sprite_blitter_start : signal is true;
-  attribute keep of sprite_blitter_done : signal is true;
+  -- control signals
+  signal frame_done : std_logic;
+  signal blit_start : std_logic;
+  signal blit_done  : std_logic;
 begin
   my_pll : entity pll.pll
   port map (
@@ -147,8 +143,8 @@ begin
     dest_addr => frame_buffer_addr_wr,
     dout      => frame_buffer_din,
     busy      => frame_buffer_wren,
-    start     => sprite_blitter_start,
-    done      => sprite_blitter_done
+    start     => blit_start,
+    done      => blit_done
   );
 
   -- XXX: Can this be handled by the FSM? That way we wouldn't need the VBLANK
@@ -171,31 +167,42 @@ begin
   end process;
 
   -- state machine
-  fsm : process (state, video_blank.vblank, sprite_blitter_done)
+  fsm : process (state, video_blank.vblank, blit_done, frame_done)
   begin
     next_state <= state;
 
     case state is
+      -- this is the default state, we just wait for the beginning of the frame
       when INIT =>
         if video_blank.vblank = '0' then
           next_state <= LOAD;
         end if;
 
+      -- load the next sprite
       when LOAD =>
         next_state <= LATCH;
 
+      -- latch the sprite
       when LATCH =>
         next_state <= BLIT;
 
+      -- blit the sprite to the frame buffer
       when BLIT =>
-        if sprite_blitter_done = '1' then
+        if blit_done = '1' then
           next_state <= JUMP;
         end if;
 
+      -- check whether the frame is done
       when JUMP =>
-        if video_blank.vblank = '0' then
-          next_state <= LOAD;
+        if frame_done = '1' then
+          next_state <= DONE;
         else
+          next_state <= LOAD;
+        end if;
+
+      -- wait for the end of the frame
+      when DONE =>
+        if video_blank.vblank = '1' then
           next_state <= INIT;
         end if;
 
@@ -227,9 +234,9 @@ begin
   begin
     if rising_edge(clk_12) then
       if state = LOAD then
-        sprite_blitter_start <= '1';
+        blit_start <= '1';
       else
-        sprite_blitter_start <= '0';
+        blit_start <= '0';
       end if;
     end if;
   end process;
@@ -251,6 +258,9 @@ begin
 
   -- set sprite RAM address
   sprite_ram_addr <= std_logic_vector(resize(sprite_index, sprite_ram_addr'length));
+
+  -- the frame is done when all the sprites have been blitted
+  frame_done <= '1' when sprite_index = MAX_SPRITES else '0';
 
   -- set frame buffer read address
   frame_buffer_addr_rd <= std_logic_vector(video_pos.y(7 downto 0) & video_pos.x(7 downto 0));

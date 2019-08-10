@@ -12,18 +12,18 @@ entity sprite_blitter is
     -- sprite descriptor
     sprite : in sprite_t;
 
+    -- control signals
+    start : in std_logic;
+    busy  : out std_logic;
+    done  : out std_logic;
+
     -- data in
     src_addr : out std_logic_vector(TILE_ROM_ADDR_WIDTH-1 downto 0);
     din      : in byte_t;
 
     -- data out
     dest_addr : out std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
-    dout      : out std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0);
-
-    -- control signals
-    start : in std_logic;
-    busy  : out std_logic;
-    done  : out std_logic
+    dout      : out std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0)
   );
 end sprite_blitter;
 
@@ -71,13 +71,13 @@ begin
     next_state <= state;
 
     case state is
-      -- This is the default state, we just wait for the start signal.
+      -- this is the default state, we just wait for the start signal
       when INIT =>
         if start = '1' then
           next_state <= CHECK;
         end if;
 
-      -- Check whether the sprite is visible, before we bother to render it.
+      -- check whether the sprite is visible before we bother to render it
       when CHECK =>
         if sprite_visible = '1' then
           next_state <= PRELOAD;
@@ -85,13 +85,13 @@ begin
           next_state <= INIT;
         end if;
 
-      -- Preload the data for the first pixel.
+      -- preload the data for the first pixel
       when PRELOAD =>
         if preload_done = '1' then
           next_state <= BLIT;
         end if;
 
-      -- Copy pixels from the source to the destination.
+      -- copy pixels from the source to the destination
       when BLIT =>
         if blit_done = '1' then
           next_state <= INIT;
