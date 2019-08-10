@@ -58,6 +58,7 @@ architecture arch of sprite is
 
   -- position signals
   signal src_pos  : sprite_pos_t;
+  signal load_pos : sprite_pos_t;
   signal dest_pos : pos_t;
 
   -- control signals
@@ -240,6 +241,8 @@ begin
       if state = CHECK then
         src_pos.x <= "11110";
         src_pos.y <= (others => '0');
+        load_pos.x <= (others => '0');
+        load_pos.y <= (others => '0');
       elsif state = PRE_BLIT or state = BLIT then
         if state = BLIT and src_pos.x = sprite_size-1 then
           src_pos.x <= (others => '0');
@@ -251,6 +254,18 @@ begin
           end if;
         else
           src_pos.x <= src_pos.x + 1;
+        end if;
+
+        if state = BLIT and load_pos.x = sprite_size-1 then
+          load_pos.x <= (others => '0');
+
+          if load_pos.y = sprite_size-1 then
+            load_pos.y <= (others => '0');
+          else
+            load_pos.y <= load_pos.y + 1;
+          end if;
+        else
+          load_pos.x <= load_pos.x + 1;
         end if;
       end if;
     end if;
@@ -264,26 +279,6 @@ begin
         sprite <= init_sprite(sprite_ram_dout);
       end if;
     end if;
-  end process;
-
-  -- Load graphics data from the tile ROM.
-  --
-  -- While the current two pixels are being rendered, we need to fetch data for
-  -- the next two pixels, so they are loaded in time to render them on the
-  -- screen.
-  load_gfx_data : process (sprite.code, src_pos.x, src_pos.y)
-    variable x : unsigned(3 downto 0);
-    variable y : unsigned(4 downto 0);
-  begin
-    x := src_pos.x(4 downto 1)+1;
-    y := src_pos.y(4 downto 0);
-
-    tile_rom_addr <= std_logic_vector(
-      sprite.code(9 downto 4) &
-      (sprite.code(3 downto 0) or (y(4) & x(3) & y(3) & x(2))) &
-      y(2 downto 0) &
-      x(1 downto 0)
-    );
   end process;
 
   -- latch graphics data from the tile ROM
@@ -367,6 +362,14 @@ begin
   -- set sprite visible
   -- TODO: check sprite is enabled
   sprite_visible <= '1' when sprite_size /= 0 else '0';
+
+  -- set tile ROM address
+  tile_rom_addr <= std_logic_vector(
+    sprite.code(9 downto 4) &
+    (sprite.code(3 downto 0) or (load_pos.y(4) & load_pos.x(4) & load_pos.y(3) & load_pos.x(3))) &
+    load_pos.y(2 downto 0) &
+    load_pos.x(2 downto 1)
+  );
 
   -- TODO: handle X/Y axis flipping
   dest_pos.x <= resize(sprite.pos.x+src_pos.x, dest_pos.x'length);
