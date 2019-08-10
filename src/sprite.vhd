@@ -62,8 +62,8 @@ architecture arch of sprite is
   signal dest_pos : pos_t;
 
   -- control signals
-  signal col_max : std_logic;
-  signal row_max : std_logic;
+  signal pre_blit_done : std_logic;
+  signal blit_done     : std_logic;
 
   -- pixel data
   signal pixel : nibble_t;
@@ -137,8 +137,12 @@ architecture arch of sprite is
     end case;
   end sprite_size_in_pixels;
 
+  -- XXX: for debugging
   attribute preserve : boolean;
+  attribute keep : boolean;
   attribute preserve of tile_rom_addr : signal is true;
+  attribute keep of pre_blit_done : signal is true;
+  attribute keep of blit_done : signal is true;
 begin
   my_pll : entity pll.pll
   port map (
@@ -168,7 +172,7 @@ begin
     DATA_WIDTH => SPRITE_RAM_DATA_WIDTH,
     INIT_FILE  => "rom/sprites.mif",
 
-    -- for debugging
+    -- XXX: for debugging
     ENABLE_RUNTIME_MOD => "YES"
   )
   port map (
@@ -234,17 +238,17 @@ begin
     end if;
   end process;
 
-  -- increment sprite pixel counters
-  pixel_counters : process (clk_12)
+  -- the source position represents the current pixel offset of the sprite to
+  -- be copied to the frame buffer
+  src_pos_counter : process (clk_12)
   begin
     if rising_edge(clk_12) then
       if state = CHECK then
-        src_pos.x <= "11110";
+        -- set source position to first pixel
+        src_pos.x <= (others => '0');
         src_pos.y <= (others => '0');
-        load_pos.x <= (others => '0');
-        load_pos.y <= (others => '0');
-      elsif state = PRE_BLIT or state = BLIT then
-        if state = BLIT and src_pos.x = sprite_size-1 then
+      elsif state = BLIT then
+        if src_pos.x = sprite_size-1 then
           src_pos.x <= (others => '0');
 
           if src_pos.y = sprite_size-1 then
@@ -255,8 +259,20 @@ begin
         else
           src_pos.x <= src_pos.x + 1;
         end if;
+      end if;
+    end if;
+  end process;
 
-        if state = BLIT and load_pos.x = sprite_size-1 then
+  -- the load position represents the position of the next pixel to be loaded
+  load_pos_counter : process (clk_12)
+  begin
+    if rising_edge(clk_12) then
+      if state = CHECK then
+        -- set load position to first pixel
+        load_pos.x <= (others => '0');
+        load_pos.y <= (others => '0');
+      elsif state = PRE_BLIT or state = BLIT then
+        if load_pos.x = sprite_size-1 then
           load_pos.x <= (others => '0');
 
           if load_pos.y = sprite_size-1 then
@@ -281,11 +297,12 @@ begin
     end if;
   end process;
 
-  -- latch graphics data from the tile ROM
+  -- latch fresh graphics data from the tile ROM while we are blitting the odd
+  -- pixels to the frame buffer
   latch_gfx_data : process (clk_12)
   begin
     if rising_edge(clk_12) then
-      if (state = PRE_BLIT or state = BLIT) and src_pos.x(0) = '1' then
+      if (state = PRE_BLIT or state = BLIT) and load_pos.x(0) = '1' then
         gfx_data <= tile_rom_dout;
       end if;
     end if;
@@ -300,7 +317,7 @@ begin
   end process;
 
   -- state machine
-  fsm : process (state, video_blank.vblank, col_max, row_max)
+  fsm : process (state, video_blank.vblank, pre_blit_done, blit_done)
   begin
     next_state <= state;
 
@@ -329,14 +346,13 @@ begin
         end if;
 
       when PRE_BLIT =>
-        -- FIXME: this should be the counter maximum, not the sprite width
-        if col_max = '1' then
+        if pre_blit_done = '1' then
           -- if the pre-blit is done, then start the blit
           next_state <= BLIT;
         end if;
 
       when BLIT =>
-        if col_max = '1' and row_max = '1' then
+        if blit_done = '1' then
           -- if the blit is done, then skip to the next sprite
           next_state <= JUMP;
         end if;
@@ -375,20 +391,25 @@ begin
   dest_pos.x <= resize(sprite.pos.x+src_pos.x, dest_pos.x'length);
   dest_pos.y <= resize(sprite.pos.y+src_pos.y, dest_pos.y'length);
 
+  -- the pre-blit is done when the first two pixels have been loaded
+  pre_blit_done <= '1' when state = PRE_BLIT and load_pos.x = 1 else '0';
+
   -- the blit is done when all the pixels have been copied
-  col_max <= '1' when src_pos.x = sprite_size-1 else '0';
-  row_max <= '1' when src_pos.y = sprite_size-1 else '0';
+  blit_done <= '1' when state = BLIT and src_pos.x = sprite_size-1 and src_pos.y = sprite_size-1 else '0';
 
   -- set frame buffer write address
   frame_buffer_addr_wr <= std_logic_vector(dest_pos.y(7 downto 0) & dest_pos.x(7 downto 0));
 
-  -- FIXME: why the fuck is this latching on even pixels?
   -- TODO: handle priority and colour
   frame_buffer_din <= ("0000" & gfx_data(7 downto 4)) when src_pos.x(0) = '0' else ("0000" & gfx_data(3 downto 0));
 
+  -- write to the frame buffer when we're blitting to the visible part of the frame
   frame_buffer_wren <= '1' when state = BLIT and dest_pos.x(8) = '0' and dest_pos.y(8) = '0' else '0';
 
+  -- set frame buffer read address
   frame_buffer_addr_rd <= std_logic_vector(video_pos.y(7 downto 0) & video_pos.x(7 downto 0));
+
+  -- read from the frame buffer when video output is enabled
   frame_buffer_rden <= not (video_blank.hblank or video_blank.vblank);
 
   pixel <= frame_buffer_dout(3 downto 0);
