@@ -26,7 +26,7 @@ entity sprite is
 end sprite;
 
 architecture arch of sprite is
-  type state_t is (INIT, LOAD, LATCH, BLIT, JUMP, DONE);
+  type state_t is (INIT, LOAD, LATCH, BLIT, JUMP, DONE, FLIP);
 
   -- state signals
   signal state, next_state : state_t;
@@ -39,10 +39,7 @@ architecture arch of sprite is
   signal tile_rom_addr : std_logic_vector(TILE_ROM_ADDR_WIDTH-1 downto 0);
   signal tile_rom_dout : byte_t;
 
-  -- video signals
-  signal vblank_falling : std_logic;
-
-  -- frame buffer
+  -- frame buffer signals
   signal frame_buffer_addr_rd : std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
   signal frame_buffer_addr_wr : std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
   signal frame_buffer_din     : std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0);
@@ -51,9 +48,11 @@ architecture arch of sprite is
   signal frame_buffer_rden    : std_logic;
   signal frame_buffer_wren    : std_logic;
 
-  -- sprite signals
-  signal sprite       : sprite_t;
-  signal sprite_index : unsigned(1 downto 0) := (others => '1');
+  -- sprite counter
+  signal sprite_counter : unsigned(1 downto 0) := (others => '1');
+
+  -- sprite descriptor signal
+  signal sprite : sprite_t;
 
   -- control signals
   signal frame_done : std_logic;
@@ -106,14 +105,6 @@ begin
     rden    => frame_buffer_rden
   );
 
-  vblank_edge_detector : entity work.edge_detector
-  generic map (FALLING => true)
-  port map (
-    clk  => clk,
-    data => video.vblank,
-    edge => vblank_falling
-  );
-
   sprite_biltter : entity work.sprite_blitter
   port map (
     clk       => clk,
@@ -126,17 +117,6 @@ begin
     start     => blit_start,
     done      => blit_done
   );
-
-  -- XXX: Can this be handled by the FSM? That way we wouldn't need the VBLANK
-  -- edge detector.
-  page_flipper : process (clk)
-  begin
-    if rising_edge(clk) then
-      if vblank_falling = '1' then
-        frame_buffer_flip <= not frame_buffer_flip;
-      end if;
-    end if;
-  end process;
 
   -- latch the next state
   latch_state : process (clk)
@@ -158,7 +138,7 @@ begin
           next_state <= LOAD;
         end if;
 
-      -- load the next sprite
+      -- load the sprite
       when LOAD =>
         next_state <= LATCH;
 
@@ -183,22 +163,26 @@ begin
       -- wait for the end of the frame
       when DONE =>
         if video.vblank = '1' then
-          next_state <= INIT;
+          next_state <= FLIP;
         end if;
+
+      -- flip the frame buffer
+      when FLIP =>
+        next_state <= INIT;
 
     end case;
   end process;
 
-  -- Update the sprite index counter.
+  -- Update the sprite counter.
   --
   -- Sprites are sorted from highest to lowest priority, so we need to iterate
   -- backwards to ensure that the sprites with the highest priority are drawn
   -- last.
-  sprite_index_counter : process (clk)
+  update_sprite_counter : process (clk)
   begin
     if rising_edge(clk) then
       if state = JUMP then
-        sprite_index <= sprite_index - 1;
+        sprite_counter <= sprite_counter - 1;
       end if;
     end if;
   end process;
@@ -225,11 +209,21 @@ begin
     end if;
   end process;
 
+  -- flip the frame buffer page
+  flip_frame_buffer: process(clk)
+  begin
+    if rising_edge(clk) then
+      if state = FLIP then
+        frame_buffer_flip <= not frame_buffer_flip;
+      end if;
+    end if;
+  end process;
+
   -- set sprite RAM address
-  sprite_ram_addr <= std_logic_vector(resize(sprite_index, sprite_ram_addr'length));
+  sprite_ram_addr <= std_logic_vector(resize(sprite_counter, sprite_ram_addr'length));
 
   -- the frame is done when all the sprites have been blitted
-  frame_done <= '1' when sprite_index = 0 else '0';
+  frame_done <= '1' when sprite_counter = 0 else '0';
 
   -- set frame buffer read address
   frame_buffer_addr_rd <= std_logic_vector(video.y(7 downto 0) & video.x(7 downto 0));

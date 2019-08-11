@@ -47,14 +47,14 @@ architecture arch of sprite_blitter is
   signal load_pos : sprite_pos_t;
   signal dest_pos : pos_t;
 
+  -- graphics signals
+  signal gfx_data : byte_t;
+  signal pixel    : nibble_t;
+
   -- control signals
   signal preload_done : std_logic;
   signal blit_done    : std_logic;
   signal visible      : std_logic;
-
-  -- graphics signals
-  signal gfx_data : byte_t;
-  signal pixel    : nibble_t;
 begin
   -- latch the next state
   latch_state : process (clk)
