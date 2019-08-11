@@ -2,15 +2,28 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library pll;
-
 use work.types.all;
 
+-- The sprite layer of the graphics pipeline handles the moving graphical
+-- elements you see on the screen.
+--
+-- They can be placed anywhere on the screen with per-pixel precision, can be
+-- flipped about thier horizontal and/or vertical axes, and can even overlap
+-- each other.
+--
+-- There are three different sprite sizes – 8x8, 16x16, and 32x32 – all of
+-- which are composed from one or more 8x8 tiles.
+--
+-- The data which describes the characteristics of each sprite – such as
+-- position, size, etc. – is stored in the sprite RAM. The pixel data for the
+-- 8x8 tiles which make up each sprite is stored in the sprite tile ROM.
 entity sprite is
   port (
-    clk : in std_logic;
-    vga_r, vga_g, vga_b : out std_logic_vector(5 downto 0);
-    vga_csync : out std_logic
+    clk         : in std_logic;
+    video_pos   : in pos_t;
+    video_sync  : in sync_t;
+    video_blank : in blank_t;
+    data        : out std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0)
   );
 end sprite;
 
@@ -18,10 +31,6 @@ architecture arch of sprite is
   type state_t is (INIT, LOAD, LATCH, BLIT, JUMP, DONE);
 
   signal state, next_state : state_t;
-
-  -- clock signals
-  signal clk_12 : std_logic;
-  signal cen_6  : std_logic;
 
   -- sprite RAM signals
   signal sprite_ram_addr : std_logic_vector(SPRITE_RAM_ADDR_WIDTH-1 downto 0);
@@ -32,23 +41,15 @@ architecture arch of sprite is
   signal tile_rom_dout : byte_t;
 
   -- video signals
-  signal video_pos      : pos_t;
-  signal video_sync     : sync_t;
-  signal video_blank    : blank_t;
-  signal video_on       : std_logic;
   signal vblank_falling : std_logic;
 
   -- frame buffer
   signal frame_buffer_addr_rd : std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
   signal frame_buffer_addr_wr : std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
   signal frame_buffer_din     : std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0);
-  signal frame_buffer_dout    : std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0);
   signal frame_buffer_flip    : std_logic;
   signal frame_buffer_rden    : std_logic;
   signal frame_buffer_wren    : std_logic;
-
-  -- pixel data
-  signal pixel : nibble_t;
 
   -- sprite signals
   signal sprite       : sprite_t;
@@ -59,28 +60,6 @@ architecture arch of sprite is
   signal blit_start : std_logic;
   signal blit_done  : std_logic;
 begin
-  my_pll : entity pll.pll
-  port map (
-    refclk   => clk,
-    rst      => '0',
-    outclk_0 => clk_12,
-    locked   => open
-  );
-
-  -- generate the 6MHz clock enable signal
-  clock_divider_6 : entity work.clock_divider
-  generic map (DIVISOR => 2)
-  port map (clk => clk_12, cen => cen_6);
-
-  sync_gen : entity work.sync_gen
-  port map (
-    clk   => clk_12,
-    cen   => cen_6,
-    pos   => video_pos,
-    sync  => video_sync,
-    blank => video_blank
-  );
-
   sprite_ram : entity work.single_port_rom
   generic map (
     ADDR_WIDTH => SPRITE_RAM_ADDR_WIDTH,
@@ -91,7 +70,7 @@ begin
     ENABLE_RUNTIME_MOD => "YES"
   )
   port map (
-    clk  => clk_12,
+    clk  => clk,
     addr => sprite_ram_addr,
     dout => sprite_ram_dout
   );
@@ -102,15 +81,18 @@ begin
     INIT_FILE  => "rom/vid_6g.mif"
   )
   port map (
-    clk  => clk_12,
+    clk  => clk,
     addr => tile_rom_addr,
     dout => tile_rom_dout
   );
 
   sprite_frame_buffer : entity work.frame_buffer
-  generic map (ADDR_WIDTH => FRAME_BUFFER_ADDR_WIDTH, DATA_WIDTH => FRAME_BUFFER_DATA_WIDTH)
+  generic map (
+    ADDR_WIDTH => FRAME_BUFFER_ADDR_WIDTH,
+    DATA_WIDTH => FRAME_BUFFER_DATA_WIDTH
+  )
   port map (
-    clk  => clk_12,
+    clk  => clk,
     flip => frame_buffer_flip,
 
     -- write-only port
@@ -120,21 +102,21 @@ begin
 
     -- read-only port
     addr_rd => frame_buffer_addr_rd,
-    dout    => frame_buffer_dout,
+    dout    => data,
     rden    => frame_buffer_rden
   );
 
   vblank_edge_detector : entity work.edge_detector
   generic map (FALLING => true)
   port map (
-    clk  => clk_12,
+    clk  => clk,
     data => video_blank.vblank,
     edge => vblank_falling
   );
 
   sprite_biltter : entity work.sprite_blitter
   port map (
-    clk       => clk_12,
+    clk       => clk,
     sprite    => sprite,
     src_addr  => tile_rom_addr,
     din       => tile_rom_dout,
@@ -147,9 +129,9 @@ begin
 
   -- XXX: Can this be handled by the FSM? That way we wouldn't need the VBLANK
   -- edge detector.
-  page_flipper : process (clk_12)
+  page_flipper : process (clk)
   begin
-    if rising_edge(clk_12) then
+    if rising_edge(clk) then
       if vblank_falling = '1' then
         frame_buffer_flip <= not frame_buffer_flip;
       end if;
@@ -157,9 +139,9 @@ begin
   end process;
 
   -- latch the next state
-  latch_state : process (clk_12)
+  latch_state : process (clk)
   begin
-    if rising_edge(clk_12) then
+    if rising_edge(clk) then
       state <= next_state;
     end if;
   end process;
@@ -212,9 +194,9 @@ begin
   -- Sprites are sorted from highest to lowest priority, so we need to iterate
   -- backwards to ensure that the sprites with the highest priority are drawn
   -- last.
-  sprite_index_counter : process (clk_12)
+  sprite_index_counter : process (clk)
   begin
-    if rising_edge(clk_12) then
+    if rising_edge(clk) then
       if state = JUMP then
         sprite_index <= sprite_index - 1;
       end if;
@@ -222,9 +204,9 @@ begin
   end process;
 
   -- latch sprite from the sprite RAM
-  latch_sprite : process (clk_12)
+  latch_sprite : process (clk)
   begin
-    if rising_edge(clk_12) then
+    if rising_edge(clk) then
       if state = LATCH then
         sprite <= init_sprite(sprite_ram_dout);
       end if;
@@ -232,28 +214,13 @@ begin
   end process;
 
   -- start the sprite blitter
-  blit_sprite : process (clk_12)
+  blit_sprite : process (clk)
   begin
-    if rising_edge(clk_12) then
+    if rising_edge(clk) then
       if state = LOAD then
         blit_start <= '1';
       else
         blit_start <= '0';
-      end if;
-    end if;
-  end process;
-
-  video_output : process (clk_12)
-  begin
-    if rising_edge(clk_12) and cen_6 = '1' then
-      if video_on = '1' then
-        vga_r <= pixel & pixel(3 downto 2);
-        vga_g <= pixel & pixel(3 downto 2);
-        vga_b <= pixel & pixel(3 downto 2);
-      else
-        vga_r <= (others => '0');
-        vga_g <= (others => '0');
-        vga_b <= (others => '0');
       end if;
     end if;
   end process;
@@ -269,10 +236,4 @@ begin
 
   -- read from the frame buffer when video output is enabled
   frame_buffer_rden <= not (video_blank.hblank or video_blank.vblank);
-
-  -- set the pixel
-  pixel <= frame_buffer_dout(3 downto 0);
-
-  video_on <= not (video_blank.hblank or video_blank.vblank);
-  vga_csync <= not (video_sync.hsync xor video_sync.vsync);
 end arch;
