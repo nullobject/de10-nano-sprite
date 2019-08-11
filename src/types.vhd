@@ -63,23 +63,30 @@ package types is
   constant SPRITE_LO_POS_X_MSB : natural := 47;
   constant SPRITE_LO_POS_X_LSB : natural := 40;
 
-  -- represents a position
+  -- represents a screen position
   type pos_t is record
     x : unsigned(8 downto 0);
     y : unsigned(8 downto 0);
   end record pos_t;
 
-  -- represents the horizontal and vertical sync signals
-  type sync_t is record
+  -- represents the video signals
+  type video_t is record
+    -- position
+    x : unsigned(8 downto 0);
+    y : unsigned(8 downto 0);
+
+    -- sync signals
     hsync : std_logic;
     vsync : std_logic;
-  end record sync_t;
+    csync : std_logic;
 
-  -- represents the horizontal and vertical blank signals
-  type blank_t is record
+    -- blank signals
     hblank : std_logic;
     vblank : std_logic;
-  end record blank_t;
+
+    -- enable video output
+    enable : std_logic;
+  end record video_t;
 
   -- represents a sprite
   type sprite_t is record
@@ -99,12 +106,14 @@ package types is
     y : unsigned(4 downto 0);
   end record sprite_pos_t;
 
+  -- calculate sprite size (8x8, 16x16, 32x32)
+  function sprite_size_in_pixels(size : std_logic_vector(1 downto 0)) return natural;
+
   -- initialise sprite from a raw 64-bit value
   function init_sprite(data : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0)) return sprite_t;
 end package types;
 
 package body types is
-  -- calculate sprite size (8x8, 16x16, 32x32)
   function sprite_size_in_pixels(size : std_logic_vector(1 downto 0)) return natural is
   begin
     case size is

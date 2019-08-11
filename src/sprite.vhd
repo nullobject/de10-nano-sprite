@@ -19,17 +19,16 @@ use work.types.all;
 -- 8x8 tiles which make up each sprite is stored in the sprite tile ROM.
 entity sprite is
   port (
-    clk         : in std_logic;
-    video_pos   : in pos_t;
-    video_sync  : in sync_t;
-    video_blank : in blank_t;
-    data        : out std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0)
+    clk   : in std_logic;
+    video : in video_t;
+    data  : out std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0)
   );
 end sprite;
 
 architecture arch of sprite is
   type state_t is (INIT, LOAD, LATCH, BLIT, JUMP, DONE);
 
+  -- state signals
   signal state, next_state : state_t;
 
   -- sprite RAM signals
@@ -47,6 +46,7 @@ architecture arch of sprite is
   signal frame_buffer_addr_rd : std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
   signal frame_buffer_addr_wr : std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
   signal frame_buffer_din     : std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0);
+  signal frame_buffer_dout    : std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0);
   signal frame_buffer_flip    : std_logic;
   signal frame_buffer_rden    : std_logic;
   signal frame_buffer_wren    : std_logic;
@@ -102,7 +102,7 @@ begin
 
     -- read-only port
     addr_rd => frame_buffer_addr_rd,
-    dout    => data,
+    dout    => frame_buffer_dout,
     rden    => frame_buffer_rden
   );
 
@@ -110,7 +110,7 @@ begin
   generic map (FALLING => true)
   port map (
     clk  => clk,
-    data => video_blank.vblank,
+    data => video.vblank,
     edge => vblank_falling
   );
 
@@ -147,14 +147,14 @@ begin
   end process;
 
   -- state machine
-  fsm : process (state, video_blank.vblank, blit_done, frame_done)
+  fsm : process (state, video.vblank, blit_done, frame_done)
   begin
     next_state <= state;
 
     case state is
       -- this is the default state, we just wait for the beginning of the frame
       when INIT =>
-        if video_blank.vblank = '0' then
+        if video.vblank = '0' then
           next_state <= LOAD;
         end if;
 
@@ -182,7 +182,7 @@ begin
 
       -- wait for the end of the frame
       when DONE =>
-        if video_blank.vblank = '1' then
+        if video.vblank = '1' then
           next_state <= INIT;
         end if;
 
@@ -213,7 +213,7 @@ begin
     end if;
   end process;
 
-  -- start the sprite blitter
+  -- start a blit operation
   blit_sprite : process (clk)
   begin
     if rising_edge(clk) then
@@ -232,8 +232,11 @@ begin
   frame_done <= '1' when sprite_index = 0 else '0';
 
   -- set frame buffer read address
-  frame_buffer_addr_rd <= std_logic_vector(video_pos.y(7 downto 0) & video_pos.x(7 downto 0));
+  frame_buffer_addr_rd <= std_logic_vector(video.y(7 downto 0) & video.x(7 downto 0));
 
   -- read from the frame buffer when video output is enabled
-  frame_buffer_rden <= not (video_blank.hblank or video_blank.vblank);
+  frame_buffer_rden <= video.enable;
+
+  -- output
+  data <= frame_buffer_dout;
 end arch;

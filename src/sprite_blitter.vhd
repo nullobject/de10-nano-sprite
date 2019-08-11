@@ -39,6 +39,7 @@ end sprite_blitter;
 architecture arch of sprite_blitter is
   type state_t is (INIT, CHECK, PRELOAD, BLIT);
 
+  -- state signals
   signal state, next_state : state_t;
 
   -- position signals

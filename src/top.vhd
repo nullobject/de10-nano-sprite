@@ -20,10 +20,7 @@ architecture arch of top is
   signal cen_6  : std_logic;
 
   -- video signals
-  signal video_pos   : pos_t;
-  signal video_sync  : sync_t;
-  signal video_blank : blank_t;
-  signal video_on    : std_logic;
+  signal video : video_t;
 
   -- sprite data
   signal sprite_data : std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0);
@@ -48,24 +45,20 @@ begin
   port map (
     clk   => clk_12,
     cen   => cen_6,
-    pos   => video_pos,
-    sync  => video_sync,
-    blank => video_blank
+    video => video
   );
 
   sprite : entity work.sprite
   port map (
-    clk         => clk_12,
-    video_pos   => video_pos,
-    video_sync  => video_sync,
-    video_blank => video_blank,
-    data        => sprite_data
+    clk   => clk_12,
+    video => video,
+    data  => sprite_data
   );
 
   video_output : process (clk_12)
   begin
     if rising_edge(clk_12) and cen_6 = '1' then
-      if video_on = '1' then
+      if video.enable = '1' then
         vga_r <= pixel & pixel(3 downto 2);
         vga_g <= pixel & pixel(3 downto 2);
         vga_b <= pixel & pixel(3 downto 2);
@@ -80,6 +73,5 @@ begin
   -- set the pixel data
   pixel <= sprite_data(3 downto 0);
 
-  video_on <= not (video_blank.hblank or video_blank.vblank);
-  vga_csync <= not (video_sync.hsync xor video_sync.vsync);
+  vga_csync <= video.csync;
 end arch;
