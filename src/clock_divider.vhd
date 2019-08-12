@@ -28,7 +28,7 @@ entity clock_divider is
     DIVISOR : natural
   );
   port (
-    -- input clock
+    -- clock
     clk : in std_logic;
 
     -- clock enable output strobe

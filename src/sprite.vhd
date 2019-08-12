@@ -11,17 +11,22 @@ use work.types.all;
 -- flipped about thier horizontal and/or vertical axes, and can even overlap
 -- each other.
 --
--- There are three different sprite sizes – 8x8, 16x16, and 32x32 – all of
--- which are composed from one or more 8x8 tiles.
+-- There are four different sprite sizes – 8x8, 16x16, 32x32, and 64x64 – which
+-- are all composed from one or more 8x8 tiles.
 --
 -- The data which describes the characteristics of each sprite – such as
 -- position, size, etc. – is stored in the sprite RAM. The pixel data for the
 -- 8x8 tiles which make up each sprite is stored in the sprite tile ROM.
 entity sprite is
   port (
-    clk   : in std_logic;
+    -- clock
+    clk : in std_logic;
+
+    -- video signals
     video : in video_t;
-    data  : out std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0)
+
+    -- graphics data
+    data : out std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0)
   );
 end sprite;
 
@@ -51,7 +56,7 @@ architecture arch of sprite is
   -- sprite counter
   signal sprite_counter : unsigned(1 downto 0) := (others => '1');
 
-  -- sprite descriptor signal
+  -- sprite descriptor
   signal sprite : sprite_t;
 
   -- control signals

@@ -106,7 +106,7 @@ package types is
     y : unsigned(4 downto 0);
   end record sprite_pos_t;
 
-  -- calculate sprite size (8x8, 16x16, 32x32)
+  -- calculate sprite size (8x8, 16x16, 32x32, 64x64)
   function sprite_size_in_pixels(size : std_logic_vector(1 downto 0)) return natural;
 
   -- initialise sprite from a raw 64-bit value
@@ -117,10 +117,10 @@ package body types is
   function sprite_size_in_pixels(size : std_logic_vector(1 downto 0)) return natural is
   begin
     case size is
-      when "00" => return 0;
-      when "01" => return 8;
-      when "10" => return 16;
-      when "11" => return 32;
+      when "00" => return 8;
+      when "01" => return 16;
+      when "10" => return 32;
+      when "11" => return 64;
     end case;
   end sprite_size_in_pixels;
 

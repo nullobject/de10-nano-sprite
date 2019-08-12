@@ -40,7 +40,7 @@ use work.types.all;
 -- vertical frequency: 15.625kHz / 264 = 59.185 Hz
 entity sync_gen is
   port (
-    -- input clock
+    -- clock
     clk : in std_logic;
 
     -- clock enable
