@@ -23,31 +23,28 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 package types is
-  subtype byte_t is std_logic_vector(7 downto 0);
-  subtype nibble_t is std_logic_vector(3 downto 0);
+  constant SPRITE_RAM_ADDR_WIDTH      : natural := 4;
+  constant SPRITE_RAM_DATA_WIDTH      : natural := 64;
+  constant SPRITE_TILE_ROM_ADDR_WIDTH : natural := 15;
+  constant FRAME_BUFFER_ADDR_WIDTH    : natural := 16;
+  constant FRAME_BUFFER_DATA_WIDTH    : natural := 10;
 
-  constant TILE_ROM_ADDR_WIDTH     : natural := 15;
-  constant FRAME_BUFFER_ADDR_WIDTH : natural := 16;
-  constant FRAME_BUFFER_DATA_WIDTH : natural := 10;
-  constant SPRITE_RAM_ADDR_WIDTH   : natural := 4;
-  constant SPRITE_RAM_DATA_WIDTH   : natural := 64;
-
-  -- byte 0
+  -- sprite byte 0
   constant SPRITE_HI_CODE_MSB : natural := 7;
   constant SPRITE_HI_CODE_LSB : natural := 4;
   constant SPRITE_ENABLE_BIT  : natural := 2;
   constant SPRITE_FLIP_Y_BIT  : natural := 1;
   constant SPRITE_FLIP_X_BIT  : natural := 0;
 
-  -- byte 1
+  -- sprite byte 1
   constant SPRITE_LO_CODE_MSB : natural := 15;
   constant SPRITE_LO_CODE_LSB : natural := 8;
 
-  -- byte 2
+  -- sprite byte 2
   constant SPRITE_SIZE_MSB : natural := 17;
   constant SPRITE_SIZE_LSB : natural := 16;
 
-  -- byte 3
+  -- sprite byte 3
   constant SPRITE_PRIORITY_MSB : natural := 31;
   constant SPRITE_PRIORITY_LSB : natural := 30;
   constant SPRITE_HI_POS_Y_BIT : natural := 29;
@@ -55,38 +52,23 @@ package types is
   constant SPRITE_COLOR_MSB    : natural := 27;
   constant SPRITE_COLOR_LSB    : natural := 24;
 
-  -- byte 4
+  -- sprite byte 4
   constant SPRITE_LO_POS_Y_MSB : natural := 39;
   constant SPRITE_LO_POS_Y_LSB : natural := 32;
 
-  -- byte 5
+  -- sprite byte 5
   constant SPRITE_LO_POS_X_MSB : natural := 47;
   constant SPRITE_LO_POS_X_LSB : natural := 40;
 
-  -- represents a screen position
+  subtype byte_t is std_logic_vector(7 downto 0);
+  subtype nibble_t is std_logic_vector(3 downto 0);
+  subtype priority_t is unsigned(1 downto 0);
+
+  -- represents a position
   type pos_t is record
     x : unsigned(8 downto 0);
     y : unsigned(8 downto 0);
   end record pos_t;
-
-  -- represents the video signals
-  type video_t is record
-    -- position
-    x : unsigned(8 downto 0);
-    y : unsigned(8 downto 0);
-
-    -- sync signals
-    hsync : std_logic;
-    vsync : std_logic;
-    csync : std_logic;
-
-    -- blank signals
-    hblank : std_logic;
-    vblank : std_logic;
-
-    -- enable video output
-    enable : std_logic;
-  end record video_t;
 
   -- represents a sprite
   type sprite_t is record
@@ -100,11 +82,22 @@ package types is
     size     : unsigned(5 downto 0);
   end record sprite_t;
 
-  -- represents the position of a pixel in a sprite
-  type sprite_pos_t is record
-    x : unsigned(4 downto 0);
-    y : unsigned(4 downto 0);
-  end record sprite_pos_t;
+  -- represents the video signals
+  type video_t is record
+    -- position
+    pos : pos_t;
+
+    -- sync signals
+    hsync : std_logic;
+    vsync : std_logic;
+
+    -- blank signals
+    hblank : std_logic;
+    vblank : std_logic;
+
+    -- enable video output
+    enable : std_logic;
+  end record video_t;
 
   -- calculate sprite size (8x8, 16x16, 32x32, 64x64)
   function sprite_size_in_pixels(size : std_logic_vector(1 downto 0)) return natural;

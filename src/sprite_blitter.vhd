@@ -1,3 +1,23 @@
+-- Copyright (c) 2019 Josh Bassett
+--
+-- Permission is hereby granted, free of charge, to any person obtaining a copy
+-- of this software and associated documentation files (the "Software"), to deal
+-- in the Software without restriction, including without limitation the rights
+-- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+-- copies of the Software, and to permit persons to whom the Software is
+-- furnished to do so, subject to the following conditions:
+--
+-- The above copyright notice and this permission notice shall be included in all
+-- copies or substantial portions of the Software.
+--
+-- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+-- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+-- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+-- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+-- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+-- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+-- SOFTWARE.
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -27,7 +47,7 @@ entity sprite_blitter is
     done  : out std_logic;
 
     -- data in
-    src_addr : out std_logic_vector(TILE_ROM_ADDR_WIDTH-1 downto 0);
+    src_addr : out std_logic_vector(SPRITE_TILE_ROM_ADDR_WIDTH-1 downto 0);
     din      : in byte_t;
 
     -- data out
@@ -37,6 +57,12 @@ entity sprite_blitter is
 end sprite_blitter;
 
 architecture arch of sprite_blitter is
+  -- represents the position of a pixel in a sprite
+  type sprite_pos_t is record
+    x : unsigned(4 downto 0);
+    y : unsigned(4 downto 0);
+  end record sprite_pos_t;
+
   type state_t is (INIT, CHECK, PRELOAD, BLIT);
 
   -- state signals
@@ -48,8 +74,8 @@ architecture arch of sprite_blitter is
   signal dest_pos : pos_t;
 
   -- graphics signals
-  signal gfx_data : byte_t;
-  signal pixel    : nibble_t;
+  signal pixel      : nibble_t;
+  signal pixel_pair : byte_t;
 
   -- control signals
   signal preload_done : std_logic;
@@ -65,7 +91,7 @@ begin
   end process;
 
   -- state machine
-  fsm : process (state, start, preload_done, blit_done)
+  fsm : process (state, start, visible, preload_done, blit_done)
   begin
     next_state <= state;
 
@@ -95,7 +121,6 @@ begin
         if blit_done = '1' then
           next_state <= INIT;
         end if;
-
     end case;
   end process;
 
@@ -125,7 +150,7 @@ begin
   end process;
 
   -- the load position represents the position of the next pixel to be loaded
-  load_pos_counter : process (clk)
+  update_load_pos_counter : process (clk)
   begin
     if rising_edge(clk) then
       if state = INIT then
@@ -148,13 +173,13 @@ begin
     end if;
   end process;
 
-  -- latch fresh graphics data from the tile ROM while we are blitting the odd
-  -- pixels to the frame buffer
-  latch_gfx_data : process (clk)
+  -- Latch pixel data from the tile ROM when rendering odd pixels (i.e. the
+  -- second pixel in every pair of pixels).
+  latch_pixel_data : process (clk)
   begin
     if rising_edge(clk) then
       if (state = PRELOAD or state = BLIT) and load_pos.x(0) = '1' then
-        gfx_data <= din;
+        pixel_pair <= din;
       end if;
     end if;
   end process;
@@ -165,10 +190,12 @@ begin
   -- set done output
   done <= '1' when state = INIT else '0';
 
-  -- the sprite is visible if it is enabled and has a non-zero size
-  visible <= '1' when sprite.enable = '1' and sprite.size /= 0 else '0';
+  -- the sprite is visible if it is enabled
+  visible <= '1' when sprite.enable = '1' else '0';
 
-  -- the source address
+  -- Set the source address.
+  --
+  -- This encoding is taken directly from the schematic.
   src_addr <= std_logic_vector(
     sprite.code(9 downto 4) &
     (sprite.code(3 downto 0) or (load_pos.y(4) & load_pos.x(4) & load_pos.y(3) & load_pos.x(3))) &
@@ -192,8 +219,8 @@ begin
   dest_addr <= std_logic_vector(dest_pos.y(7 downto 0) & dest_pos.x(7 downto 0));
 
   -- set current pixel
-  pixel <= gfx_data(7 downto 4) when src_pos.x(0) = '0' else gfx_data(3 downto 0);
+  pixel <= pixel_pair(7 downto 4) when src_pos.x(0) = '0' else pixel_pair(3 downto 0);
 
-  -- output
+  -- set output data
   dout <= std_logic_vector(sprite.priority & sprite.color) & pixel;
 end arch;

@@ -1,3 +1,23 @@
+-- Copyright (c) 2019 Josh Bassett
+--
+-- Permission is hereby granted, free of charge, to any person obtaining a copy
+-- of this software and associated documentation files (the "Software"), to deal
+-- in the Software without restriction, including without limitation the rights
+-- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+-- copies of the Software, and to permit persons to whom the Software is
+-- furnished to do so, subject to the following conditions:
+--
+-- The above copyright notice and this permission notice shall be included in all
+-- copies or substantial portions of the Software.
+--
+-- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+-- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+-- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+-- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+-- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+-- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+-- SOFTWARE.
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -26,7 +46,8 @@ entity sprite is
     video : in video_t;
 
     -- graphics data
-    data : out std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0)
+    priority : out priority_t;
+    data     : out byte_t
   );
 end sprite;
 
@@ -41,7 +62,7 @@ architecture arch of sprite is
   signal sprite_ram_dout : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0);
 
   -- tile ROM signals
-  signal tile_rom_addr : std_logic_vector(TILE_ROM_ADDR_WIDTH-1 downto 0);
+  signal tile_rom_addr : std_logic_vector(SPRITE_TILE_ROM_ADDR_WIDTH-1 downto 0);
   signal tile_rom_dout : byte_t;
 
   -- frame buffer signals
@@ -54,7 +75,7 @@ architecture arch of sprite is
   signal frame_buffer_wren    : std_logic;
 
   -- sprite counter
-  signal sprite_counter : unsigned(1 downto 0) := (others => '1');
+  signal sprite_counter : natural range 0 to 3;
 
   -- sprite descriptor
   signal sprite : sprite_t;
@@ -81,7 +102,7 @@ begin
 
   tile_rom : entity work.single_port_rom
   generic map (
-    ADDR_WIDTH => TILE_ROM_ADDR_WIDTH,
+    ADDR_WIDTH => SPRITE_TILE_ROM_ADDR_WIDTH,
     INIT_FILE  => "rom/vid_6g.mif"
   )
   port map (
@@ -174,20 +195,19 @@ begin
       -- flip the frame buffer
       when FLIP =>
         next_state <= INIT;
-
     end case;
   end process;
 
   -- Update the sprite counter.
   --
-  -- Sprites are sorted from highest to lowest priority, so we need to iterate
-  -- backwards to ensure that the sprites with the highest priority are drawn
-  -- last.
+  -- Sprites are sorted from lowest to highest priority. If sprites are
+  -- overlapping, then the higher priority sprites will appear above lower
+  -- priority sprites.
   update_sprite_counter : process (clk)
   begin
     if rising_edge(clk) then
       if state = JUMP then
-        sprite_counter <= sprite_counter - 1;
+        sprite_counter <= sprite_counter + 1;
       end if;
     end if;
   end process;
@@ -225,17 +245,18 @@ begin
   end process;
 
   -- set sprite RAM address
-  sprite_ram_addr <= std_logic_vector(resize(sprite_counter, sprite_ram_addr'length));
+  sprite_ram_addr <= std_logic_vector(to_unsigned(sprite_counter, sprite_ram_addr'length));
 
   -- the frame is done when all the sprites have been blitted
-  frame_done <= '1' when sprite_counter = 0 else '0';
+  frame_done <= '1' when sprite_counter = sprite_counter'high else '0';
 
   -- set frame buffer read address
-  frame_buffer_addr_rd <= std_logic_vector(video.y(7 downto 0) & video.x(7 downto 0));
+  frame_buffer_addr_rd <= std_logic_vector(video.pos.y(7 downto 0) & video.pos.x(7 downto 0));
 
   -- read from the frame buffer when video output is enabled
   frame_buffer_rden <= video.enable;
 
-  -- output
-  data <= frame_buffer_dout;
+  -- set layer data
+  priority <= unsigned(frame_buffer_dout(9 downto 8));
+  data     <= frame_buffer_dout(7 downto 0);
 end arch;

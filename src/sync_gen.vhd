@@ -40,18 +40,16 @@ use work.types.all;
 -- vertical frequency: 15.625kHz / 264 = 59.185 Hz
 entity sync_gen is
   port (
-    -- clock
-    clk : in std_logic;
-
-    -- clock enable
-    cen : in std_logic;
+    -- clock signals
+    clk   : in std_logic;
+    cen_6 : in std_logic;
 
     -- video signals
     video : out video_t
   );
 end sync_gen;
 
-architecture struct of sync_gen is
+architecture arch of sync_gen is
   -- horizontal regions
   constant H_DISPLAY     : natural := 256;
   constant H_FRONT_PORCH : natural := 48;
@@ -80,11 +78,11 @@ architecture struct of sync_gen is
   -- blank signals
   signal hblank, vblank : std_logic;
 begin
-  -- generate horizontal timings
+  -- generate horizontal timing signals
   horizontal_timing : process (clk)
   begin
     if rising_edge(clk) then
-      if cen = '1' then
+      if cen_6 = '1' then
         if x = 511 then
           x <= H_START;
         else
@@ -106,11 +104,11 @@ begin
     end if;
   end process;
 
-  -- generate vertical timings
+  -- generate vertical timing signals
   vertical_timing : process (clk)
   begin
     if rising_edge(clk) then
-      if cen = '1' then
+      if cen_6 = '1' then
         if x = H_START+H_FRONT_PORCH-1 then
           if y = 511 then
             y <= V_START;
@@ -135,13 +133,12 @@ begin
   end process;
 
   -- set video position
-  video.x <= to_unsigned(x, video.x'length);
-  video.y <= to_unsigned(y, video.y'length);
+  video.pos.x <= to_unsigned(x, video.pos.x'length);
+  video.pos.y <= to_unsigned(y, video.pos.y'length);
 
   -- set sync signals
   video.hsync <= hsync;
   video.vsync <= vsync;
-  video.csync <= not (hsync xor vsync);
 
   -- set blank signals
   video.hblank <= hblank;
@@ -149,4 +146,4 @@ begin
 
   -- set output enable
   video.enable <= not (hblank or vblank);
-end architecture;
+end architecture arch;
