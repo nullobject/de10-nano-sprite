@@ -82,8 +82,8 @@ architecture arch of sprite is
 
   -- control signals
   signal frame_done : std_logic;
-  signal blit_start : std_logic;
-  signal blit_done  : std_logic;
+  signal blitter_start : std_logic;
+  signal blitter_ready  : std_logic;
 begin
   sprite_ram : entity work.single_port_rom
   generic map (
@@ -134,15 +134,15 @@ begin
 
   sprite_biltter : entity work.sprite_blitter
   port map (
-    clk       => clk,
-    sprite    => sprite,
-    src_addr  => tile_rom_addr,
-    din       => tile_rom_dout,
-    dest_addr => frame_buffer_addr_wr,
-    dout      => frame_buffer_din,
-    busy      => frame_buffer_wren,
-    start     => blit_start,
-    done      => blit_done
+    clk               => clk,
+    sprite            => sprite,
+    ready             => blitter_ready,
+    start             => blitter_start,
+    tile_rom_addr     => tile_rom_addr,
+    tile_rom_data     => tile_rom_dout,
+    frame_buffer_addr => frame_buffer_addr_wr,
+    frame_buffer_data => frame_buffer_din,
+    frame_buffer_wren => frame_buffer_wren
   );
 
   -- latch the next state
@@ -154,7 +154,7 @@ begin
   end process;
 
   -- state machine
-  fsm : process (state, video.vblank, blit_done, frame_done)
+  fsm : process (state, video.vblank, blitter_ready, frame_done)
   begin
     next_state <= state;
 
@@ -175,7 +175,7 @@ begin
 
       -- blit the sprite
       when BLIT =>
-        if blit_done = '1' then
+        if blitter_ready = '1' then
           next_state <= JUMP;
         end if;
 
@@ -228,9 +228,9 @@ begin
   begin
     if rising_edge(clk) then
       if state = LOAD then
-        blit_start <= '1';
+        blitter_start <= '1';
       else
-        blit_start <= '0';
+        blitter_start <= '0';
       end if;
     end if;
   end process;
