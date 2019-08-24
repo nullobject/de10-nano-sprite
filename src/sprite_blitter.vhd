@@ -42,17 +42,17 @@ entity sprite_blitter is
     sprite : in sprite_t;
 
     -- control signals
+    ready : out std_logic;
     start : in std_logic;
-    busy  : out std_logic;
-    done  : out std_logic;
 
     -- data in
-    src_addr : out std_logic_vector(SPRITE_TILE_ROM_ADDR_WIDTH-1 downto 0);
-    din      : in byte_t;
+    tile_rom_addr : out std_logic_vector(SPRITE_TILE_ROM_ADDR_WIDTH-1 downto 0);
+    tile_rom_data : in std_logic_vector(SPRITE_TILE_ROM_DATA_WIDTH-1 downto 0);
 
     -- data out
-    dest_addr : out std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
-    dout      : out std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0)
+    frame_buffer_addr : out std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
+    frame_buffer_data : out std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0);
+    frame_buffer_wren : out std_logic
   );
 end sprite_blitter;
 
@@ -74,8 +74,8 @@ architecture arch of sprite_blitter is
   signal dest_pos : pos_t;
 
   -- graphics signals
-  signal pixel      : nibble_t;
-  signal pixel_pair : byte_t;
+  signal pixel    : nibble_t;
+  signal tile_row : std_logic_vector(SPRITE_TILE_ROM_DATA_WIDTH-1 downto 0);
 
   -- control signals
   signal preload_done : std_logic;
@@ -110,7 +110,7 @@ begin
           next_state <= INIT;
         end if;
 
-      -- preload the data for the first pixel
+      -- preload the first row of pixels
       when PRELOAD =>
         if preload_done = '1' then
           next_state <= BLIT;
@@ -173,34 +173,33 @@ begin
     end if;
   end process;
 
-  -- Latch pixel data from the tile ROM when rendering odd pixels (i.e. the
-  -- second pixel in every pair of pixels).
-  latch_pixel_data : process (clk)
+  -- latch the next row from the tile ROM when rendering the last pixel in
+  -- every row
+  latch_tile_row : process (clk)
   begin
     if rising_edge(clk) then
-      if (state = PRELOAD or state = BLIT) and load_pos.x(0) = '1' then
-        pixel_pair <= din;
+      if (state = PRELOAD or state = BLIT) and load_pos.x(2 downto 0) = 7 then
+        tile_row <= tile_rom_data;
       end if;
     end if;
   end process;
 
   -- write to the frame buffer when we're blitting to the visible part of the frame
-  busy <= '1' when state = BLIT and pixel /= "0000" and dest_pos.x(8) = '0' and dest_pos.y(8) = '0' else '0';
+  frame_buffer_wren <= '1' when state = BLIT and pixel /= "0000" and dest_pos.x(8) = '0' and dest_pos.y(8) = '0' else '0';
 
-  -- set done output
-  done <= '1' when state = INIT else '0';
+  -- set ready output
+  ready <= '1' when state = INIT else '0';
 
   -- the sprite is visible if it is enabled
   visible <= '1' when sprite.enable = '1' else '0';
 
-  -- Set the source address.
+  -- Set the tile ROM address.
   --
-  -- This encoding is taken directly from the schematic.
-  src_addr <= std_logic_vector(
+  -- This address points to the next row in the current 8x8 tile.
+  tile_rom_addr <= std_logic_vector(
     sprite.code(9 downto 4) &
     (sprite.code(3 downto 0) or (load_pos.y(4) & load_pos.x(4) & load_pos.y(3) & load_pos.x(3))) &
-    load_pos.y(2 downto 0) &
-    load_pos.x(2 downto 1)
+    load_pos.y(2 downto 0)
   );
 
   -- set destination position and handle X/Y axis flipping
@@ -209,18 +208,27 @@ begin
   dest_pos.y <= resize(sprite.pos.y+src_pos.y, dest_pos.y'length) when sprite.flip_y = '0' else
                 resize(sprite.pos.y-src_pos.y+sprite.size-1, dest_pos.y'length);
 
-  -- the pre-blit is done when the first two pixels have been loaded
-  preload_done <= '1' when load_pos.x = 1 else '0';
+  -- the preload is done when the first row of pixels has been loaded
+  preload_done <= '1' when load_pos.x = 7 else '0';
 
   -- the blit is done when all the pixels have been copied
   blit_done <= '1' when src_pos.x = sprite.size-1 and src_pos.y = sprite.size-1 else '0';
 
-  -- set destination address
-  dest_addr <= std_logic_vector(dest_pos.y(7 downto 0) & dest_pos.x(7 downto 0));
+  -- set frame buffer address
+  frame_buffer_addr <= std_logic_vector(dest_pos.y(7 downto 0) & dest_pos.x(7 downto 0));
 
-  -- set current pixel
-  pixel <= pixel_pair(7 downto 4) when src_pos.x(0) = '0' else pixel_pair(3 downto 0);
+  -- decode the pixel from the tile row data
+  with to_integer(src_pos.x(2 downto 0)) select
+    pixel <= tile_row(31 downto 28) when 0,
+             tile_row(27 downto 24) when 1,
+             tile_row(23 downto 20) when 2,
+             tile_row(19 downto 16) when 3,
+             tile_row(15 downto 12) when 4,
+             tile_row(11 downto 8)  when 5,
+             tile_row(7 downto 4)   when 6,
+             tile_row(3 downto 0)   when 7,
+             (others => '0')        when others;
 
-  -- set output data
-  dout <= std_logic_vector(sprite.priority & sprite.color) & pixel;
+  -- set frame buffer data
+  frame_buffer_data <= std_logic_vector(sprite.priority & sprite.color) & pixel;
 end arch;

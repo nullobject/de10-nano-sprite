@@ -25,7 +25,8 @@ use ieee.numeric_std.all;
 package types is
   constant SPRITE_RAM_ADDR_WIDTH      : natural := 4;
   constant SPRITE_RAM_DATA_WIDTH      : natural := 64;
-  constant SPRITE_TILE_ROM_ADDR_WIDTH : natural := 15;
+  constant SPRITE_TILE_ROM_ADDR_WIDTH : natural := 13;
+  constant SPRITE_TILE_ROM_DATA_WIDTH : natural := 32;
   constant FRAME_BUFFER_ADDR_WIDTH    : natural := 16;
   constant FRAME_BUFFER_DATA_WIDTH    : natural := 10;
 
