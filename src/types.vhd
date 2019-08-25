@@ -23,12 +23,12 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 package types is
-  constant SPRITE_RAM_ADDR_WIDTH      : natural := 4;
-  constant SPRITE_RAM_DATA_WIDTH      : natural := 64;
-  constant SPRITE_TILE_ROM_ADDR_WIDTH : natural := 13;
-  constant SPRITE_TILE_ROM_DATA_WIDTH : natural := 32;
-  constant FRAME_BUFFER_ADDR_WIDTH    : natural := 16;
-  constant FRAME_BUFFER_DATA_WIDTH    : natural := 10;
+  constant SPRITE_RAM_ADDR_WIDTH   : natural := 4;
+  constant SPRITE_RAM_DATA_WIDTH   : natural := 64;
+  constant SPRITE_ROM_ADDR_WIDTH   : natural := 13;
+  constant SPRITE_ROM_DATA_WIDTH   : natural := 32;
+  constant FRAME_BUFFER_ADDR_WIDTH : natural := 16;
+  constant FRAME_BUFFER_DATA_WIDTH : natural := 10;
 
   -- sprite byte 0
   constant SPRITE_HI_CODE_MSB : natural := 7;
@@ -61,9 +61,18 @@ package types is
   constant SPRITE_LO_POS_X_MSB : natural := 47;
   constant SPRITE_LO_POS_X_LSB : natural := 40;
 
+  -- each 8x8 tile is composed of four layers of pixel data (bitplanes)
+  constant TILE_BPP : natural := 4;
+
   subtype byte_t is std_logic_vector(7 downto 0);
   subtype nibble_t is std_logic_vector(3 downto 0);
   subtype priority_t is unsigned(1 downto 0);
+
+  -- represents a row of pixels in a 8x8 tile
+  subtype tile_row_t is std_logic_vector(TILE_BPP*8-1 downto 0);
+
+  -- represents a pixel in a 8x8 tile
+  subtype tile_pixel_t is std_logic_vector(TILE_BPP-1 downto 0);
 
   -- represents a position
   type pos_t is record

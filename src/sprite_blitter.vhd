@@ -46,8 +46,8 @@ entity sprite_blitter is
     start : in std_logic;
 
     -- data in
-    tile_rom_addr : out std_logic_vector(SPRITE_TILE_ROM_ADDR_WIDTH-1 downto 0);
-    tile_rom_data : in std_logic_vector(SPRITE_TILE_ROM_DATA_WIDTH-1 downto 0);
+    rom_addr : out std_logic_vector(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
+    rom_data : in std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
 
     -- data out
     frame_buffer_addr : out std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
@@ -63,33 +63,25 @@ architecture arch of sprite_blitter is
     y : unsigned(4 downto 0);
   end record sprite_pos_t;
 
-  type state_t is (INIT, CHECK, PRELOAD, BLIT);
+  type state_t is (IDLE, CHECK, PRELOAD, BLIT);
 
   -- state signals
   signal state, next_state : state_t;
+
+  -- tile signals
+  signal tile_pixel : tile_pixel_t;
+  signal tile_row   : tile_row_t;
 
   -- position signals
   signal src_pos  : sprite_pos_t;
   signal load_pos : sprite_pos_t;
   signal dest_pos : pos_t;
 
-  -- graphics signals
-  signal pixel    : nibble_t;
-  signal tile_row : std_logic_vector(SPRITE_TILE_ROM_DATA_WIDTH-1 downto 0);
-
   -- control signals
   signal preload_done : std_logic;
   signal blit_done    : std_logic;
   signal visible      : std_logic;
 begin
-  -- latch the next state
-  latch_state : process (clk)
-  begin
-    if rising_edge(clk) then
-      state <= next_state;
-    end if;
-  end process;
-
   -- state machine
   fsm : process (state, start, visible, preload_done, blit_done)
   begin
@@ -97,7 +89,7 @@ begin
 
     case state is
       -- this is the default state, we just wait for the start signal
-      when INIT =>
+      when IDLE =>
         if start = '1' then
           next_state <= CHECK;
         end if;
@@ -107,7 +99,7 @@ begin
         if visible = '1' then
           next_state <= PRELOAD;
         else
-          next_state <= INIT;
+          next_state <= IDLE;
         end if;
 
       -- preload the first row of pixels
@@ -119,17 +111,25 @@ begin
       -- copy pixels from the source to the destination
       when BLIT =>
         if blit_done = '1' then
-          next_state <= INIT;
+          next_state <= IDLE;
         end if;
     end case;
   end process;
 
-  -- the source position represents the current pixel offset of the sprite to
-  -- be copied to the frame buffer
-  src_pos_counter : process (clk)
+  -- latch the next state
+  latch_next_state : process (clk)
   begin
     if rising_edge(clk) then
-      if state = INIT then
+      state <= next_state;
+    end if;
+  end process;
+
+  -- the source position represents the current pixel offset of the sprite to
+  -- be copied to the frame buffer
+  update_src_pos_counter : process (clk)
+  begin
+    if rising_edge(clk) then
+      if state = IDLE then
         -- set source position to first pixel
         src_pos.x <= (others => '0');
         src_pos.y <= (others => '0');
@@ -153,7 +153,7 @@ begin
   update_load_pos_counter : process (clk)
   begin
     if rising_edge(clk) then
-      if state = INIT then
+      if state = IDLE then
         -- set load position to first pixel
         load_pos.x <= (others => '0');
         load_pos.y <= (others => '0');
@@ -179,24 +179,24 @@ begin
   begin
     if rising_edge(clk) then
       if (state = PRELOAD or state = BLIT) and load_pos.x(2 downto 0) = 7 then
-        tile_row <= tile_rom_data;
+        tile_row <= rom_data;
       end if;
     end if;
   end process;
 
   -- write to the frame buffer when we're blitting to the visible part of the frame
-  frame_buffer_wren <= '1' when state = BLIT and pixel /= "0000" and dest_pos.x(8) = '0' and dest_pos.y(8) = '0' else '0';
+  frame_buffer_wren <= '1' when state = BLIT and tile_pixel /= "0000" and dest_pos.x(8) = '0' and dest_pos.y(8) = '0' else '0';
 
   -- set ready output
-  ready <= '1' when state = INIT else '0';
+  ready <= '1' when state = IDLE else '0';
 
   -- the sprite is visible if it is enabled
   visible <= '1' when sprite.enable = '1' else '0';
 
-  -- Set the tile ROM address.
+  -- Set the ROM address.
   --
-  -- This address points to the next row in the current 8x8 tile.
-  tile_rom_addr <= std_logic_vector(
+  -- This address points to a row of an 8x8 tile.
+  rom_addr <= std_logic_vector(
     sprite.code(9 downto 4) &
     (sprite.code(3 downto 0) or (load_pos.y(4) & load_pos.x(4) & load_pos.y(3) & load_pos.x(3))) &
     load_pos.y(2 downto 0)
@@ -214,21 +214,21 @@ begin
   -- the blit is done when all the pixels have been copied
   blit_done <= '1' when src_pos.x = sprite.size-1 and src_pos.y = sprite.size-1 else '0';
 
+  -- decode the pixel from the tile row data
+  with to_integer(src_pos.x(2 downto 0)) select
+    tile_pixel <= tile_row(31 downto 28) when 0,
+                  tile_row(27 downto 24) when 1,
+                  tile_row(23 downto 20) when 2,
+                  tile_row(19 downto 16) when 3,
+                  tile_row(15 downto 12) when 4,
+                  tile_row(11 downto 8)  when 5,
+                  tile_row(7 downto 4)   when 6,
+                  tile_row(3 downto 0)   when 7,
+                  (others => '0')        when others;
+
   -- set frame buffer address
   frame_buffer_addr <= std_logic_vector(dest_pos.y(7 downto 0) & dest_pos.x(7 downto 0));
 
-  -- decode the pixel from the tile row data
-  with to_integer(src_pos.x(2 downto 0)) select
-    pixel <= tile_row(31 downto 28) when 0,
-             tile_row(27 downto 24) when 1,
-             tile_row(23 downto 20) when 2,
-             tile_row(19 downto 16) when 3,
-             tile_row(15 downto 12) when 4,
-             tile_row(11 downto 8)  when 5,
-             tile_row(7 downto 4)   when 6,
-             tile_row(3 downto 0)   when 7,
-             (others => '0')        when others;
-
   -- set frame buffer data
-  frame_buffer_data <= std_logic_vector(sprite.priority & sprite.color) & pixel;
+  frame_buffer_data <= std_logic_vector(sprite.priority & sprite.color) & tile_pixel;
 end arch;

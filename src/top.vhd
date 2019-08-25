@@ -49,7 +49,7 @@ architecture arch of top is
   signal sprite_priority : priority_t;
 
   -- sprite data
-  signal sprite_data : byte_t := (others => '0');
+  signal sprite_data : byte_t;
 
   -- pixel data
   signal pixel : nibble_t;
