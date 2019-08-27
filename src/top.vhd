@@ -39,8 +39,9 @@ end top;
 
 architecture arch of top is
   -- clock signals
-  signal clk_12 : std_logic;
-  signal cen_6  : std_logic;
+  signal rom_clk : std_logic;
+  signal sys_clk : std_logic;
+  signal cen_6   : std_logic;
 
   -- video signals
   signal video : video_t;
@@ -51,27 +52,29 @@ architecture arch of top is
   -- sprite data
   signal sprite_data : byte_t;
 
-  -- pixel data
-  signal pixel : nibble_t;
+  -- RGB data
+  signal rgb : nibble_t;
 begin
   -- generate a 12MHz clock signal
   my_pll : entity pll.pll
   port map (
     refclk   => clk,
     rst      => '0',
-    outclk_0 => clk_12,
+    outclk_0 => SDRAM_CLK,
+    outclk_1 => rom_clk,
+    outclk_2 => sys_clk,
     locked   => open
   );
 
   -- generate a 6MHz clock enable signal
   clock_divider_6 : entity work.clock_divider
   generic map (DIVISOR => 2)
-  port map (clk => clk_12, cen => cen_6);
+  port map (clk => sys_clk, cen => cen_6);
 
   -- video timing generator
   sync_gen : entity work.sync_gen
   port map (
-    clk   => clk_12,
+    clk   => sys_clk,
     cen_6 => cen_6,
     video => video
   );
@@ -79,30 +82,32 @@ begin
   -- sprite layer
   sprite_layer : entity work.sprite
   port map (
-    clk      => clk_12,
+    clk      => sys_clk,
     video    => video,
     priority => sprite_priority,
     data     => sprite_data
   );
 
-  -- latch pixel data from the palette RAM
-  latch_pixel_data : process (clk_12)
+  -- latch RGB data from the palette RAM
+  latch_pixel_data : process (sys_clk)
   begin
-    if rising_edge(clk_12) and cen_6 = '1' then
-      if video.enable = '1' then
-        vga_r <= pixel & pixel(3 downto 2);
-        vga_g <= pixel & pixel(3 downto 2);
-        vga_b <= pixel & pixel(3 downto 2);
-      else
-        vga_r <= (others => '0');
-        vga_g <= (others => '0');
-        vga_b <= (others => '0');
+    if rising_edge(sys_clk) then
+      if cen_6 = '1' then
+        if video.enable = '1' then
+          vga_r <= rgb & rgb(3 downto 2);
+          vga_g <= rgb & rgb(3 downto 2);
+          vga_b <= rgb & rgb(3 downto 2);
+        else
+          vga_r <= (others => '0');
+          vga_g <= (others => '0');
+          vga_b <= (others => '0');
+        end if;
       end if;
     end if;
   end process;
 
-  -- set the pixel data
-  pixel <= sprite_data(3 downto 0);
+  -- set the RGB data
+  rgb <= sprite_data(3 downto 0);
 
   -- composite sync
   vga_csync <= not (video.hsync xor video.vsync);
