@@ -35,6 +35,9 @@ entity top is
     vga_r, vga_g, vga_b : out std_logic_vector(5 downto 0);
     vga_csync           : out std_logic;
 
+    -- buttons
+    key : in std_logic_vector(0 downto 0);
+
     -- SDRAM interface
     SDRAM_A    : out std_logic_vector(SDRAM_ADDR_WIDTH-1 downto 0);
     SDRAM_BA   : out std_logic_vector(SDRAM_BANK_WIDTH-1 downto 0);
@@ -51,10 +54,20 @@ entity top is
 end top;
 
 architecture arch of top is
+  type state_t is (INIT, WRITE, READ);
+
   -- clock signals
   signal rom_clk : std_logic;
   signal sys_clk : std_logic;
   signal cen_6   : std_logic;
+
+  signal reset : std_logic;
+
+  -- state signals
+  signal state, next_state : state_t;
+
+  -- counters
+  signal data_counter : natural range 0 to 16384;
 
   -- SDRAM signals
   signal sdram_addr  : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
@@ -71,6 +84,9 @@ architecture arch of top is
   -- ROM signals
   signal sprite_rom_addr : std_logic_vector(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
   signal sprite_rom_data : std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
+
+  signal load_rom_addr : std_logic_vector(13 downto 0);
+  signal load_rom_data : std_logic_vector(15 downto 0);
 
   -- sprite priority data
   signal sprite_priority : priority_t;
@@ -99,10 +115,11 @@ begin
 
   -- SDRAM controller
   sdram : entity work.sdram
+  generic map (CLK_FREQ => 48.0)
   port map (
     clk => rom_clk,
 
-    reset => '0',
+    reset => reset,
 
     -- IO interface
     addr  => sdram_addr,
@@ -128,14 +145,14 @@ begin
 
   tile_rom : entity work.single_port_rom
   generic map (
-    ADDR_WIDTH => SPRITE_ROM_ADDR_WIDTH,
-    DATA_WIDTH => SPRITE_ROM_DATA_WIDTH,
+    ADDR_WIDTH => 14,
+    DATA_WIDTH => 16,
     INIT_FILE  => "rom/vid_6g.mif"
   )
   port map (
     clk  => sys_clk,
-    addr => sprite_rom_addr,
-    dout => sprite_rom_data
+    addr => load_rom_addr,
+    dout => load_rom_data
   );
 
   -- video timing generator
@@ -157,6 +174,53 @@ begin
     data     => sprite_data
   );
 
+  -- state machine
+  fsm : process (state, data_counter)
+  begin
+    next_state <= state;
+
+    case state is
+      when INIT =>
+        if data_counter = 255 then
+          next_state <= WRITE;
+        end if;
+
+      when WRITE =>
+        if data_counter = 16383 then
+          next_state <= READ;
+        end if;
+
+      when READ =>
+    end case;
+  end process;
+
+  -- latch the next state
+  latch_next_state : process (sys_clk, reset)
+  begin
+    if reset = '1' then
+      state <= INIT;
+    elsif rising_edge(sys_clk) then
+      if cen_6 = '1' then
+        state <= next_state;
+      end if;
+    end if;
+  end process;
+
+  update_data_counter : process (sys_clk, reset)
+  begin
+    if reset = '1' then
+      data_counter <= 0;
+    elsif rising_edge(sys_clk) then
+      if cen_6 = '1' then
+        if state /= next_state then -- state changing
+          data_counter <= 0;
+        else
+          data_counter <= data_counter + 1;
+        end if;
+      end if;
+    end if;
+  end process;
+
   -- latch RGB data from the palette RAM
   latch_pixel_data : process (sys_clk)
   begin
@@ -174,6 +238,19 @@ begin
       end if;
     end if;
   end process;
+
+  reset <= not key(0);
+
+  load_rom_addr <= std_logic_vector(to_unsigned(data_counter, load_rom_addr'length));
+
+  sprite_rom_data <= sdram_dout;
+
+  sdram_addr <= std_logic_vector(resize(unsigned(load_rom_addr), sdram_addr'length)) when state = WRITE else
+                std_logic_vector(resize(unsigned(sprite_rom_addr), sdram_addr'length));
+
+  sdram_din  <= load_rom_data;
+  sdram_rden <= '1' when state = READ else '0';
+  sdram_wren <= '1' when state = WRITE else '0';
 
   -- set the RGB data
   rgb <= sprite_data(3 downto 0);
