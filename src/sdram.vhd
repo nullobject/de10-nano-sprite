@@ -108,25 +108,25 @@ architecture arch of sdram is
   -- calculate the clock period in nanoseconds
   constant CLK_PERIOD : real := 1.0/CLK_FREQ*1000.0;
 
-  -- the number of clock ticks to wait while a LOAD_MODE command is being
+  -- the number of clock cycles to wait while a LOAD_MODE command is being
   -- executed
   constant LOAD_MODE_WAIT : natural := natural(ceil(T_MRD/CLK_PERIOD));
 
-  -- the number of clock ticks to wait while an ACTIVE command is being
+  -- the number of clock cycles to wait while an ACTIVE command is being
   -- executed
   constant ACTIVE_WAIT : natural := natural(ceil(T_RCD/CLK_PERIOD));
 
-  -- the number of clock ticks to wait while an AUTO REFRESH command is being
+  -- the number of clock cycles to wait while an AUTO REFRESH command is being
   -- executed
   constant AUTO_REFRESH_WAIT : natural := natural(ceil(T_RC/CLK_PERIOD));
 
-  -- the number of clock ticks to wait while PRECHARGE command is being
+  -- the number of clock cycles to wait while PRECHARGE command is being
   -- executed
   constant PRECHARGE_WAIT : natural := natural(ceil(T_RP/CLK_PERIOD));
 
-  -- the maximum number of clock ticks between each AUTO REFRESH command, which
-  -- needs to be executed 8192 times every 64ms
-  constant REFRESH_MAX_TICKS : natural := 375;
+  -- the maximum number of clock cycles between each AUTO REFRESH command,
+  -- which needs to be executed 8192 times every 64ms
+  constant REFRESH_MAX : natural := 375;
 
   type state_t is (INIT, MODE, IDLE, ACTIVE, READ, READ_WAIT, WRITE, REFRESH);
 
@@ -245,7 +245,7 @@ begin
 
   -- Update the wait counter.
   --
-  -- The wait counter is used to hold the state for a number of clock ticks.
+  -- The wait counter is used to hold the state for a number of clock cycles.
   update_wait_counter : process (clk, reset)
   begin
     if reset = '1' then
@@ -305,12 +305,12 @@ begin
   end process;
 
   -- set control signals
-  load_mode_done <= '1' when wait_counter = LOAD_MODE_WAIT-1        else '0';
-  active_done    <= '1' when wait_counter = ACTIVE_WAIT-1           else '0';
-  refresh_done   <= '1' when wait_counter = AUTO_REFRESH_WAIT-1     else '0';
-  read_done      <= '1' when wait_counter = CAS_LATENCY-0           else '0';
-  first_word     <= '1' when wait_counter = CAS_LATENCY-1           else '0';
-  should_refresh <= '1' when refresh_counter >= REFRESH_MAX_TICKS-1 else '0';
+  load_mode_done <= '1' when wait_counter = LOAD_MODE_WAIT-1    else '0';
+  active_done    <= '1' when wait_counter = ACTIVE_WAIT-1       else '0';
+  refresh_done   <= '1' when wait_counter = AUTO_REFRESH_WAIT-1 else '0';
+  read_done      <= '1' when wait_counter = CAS_LATENCY-0       else '0';
+  first_word     <= '1' when wait_counter = CAS_LATENCY-1       else '0';
+  should_refresh <= '1' when refresh_counter >= REFRESH_MAX-1   else '0';
 
   -- the output data is valid when the read is done
   valid <= '1' when state = READ_WAIT and read_done = '1' else '0';
