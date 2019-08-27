@@ -45,6 +45,10 @@ entity sprite is
     -- video signals
     video : in video_t;
 
+    -- sprite ROM
+    rom_addr : out std_logic_vector(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
+    rom_data : in std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
+
     -- graphics data
     priority : out priority_t;
     data     : out byte_t
@@ -58,12 +62,8 @@ architecture arch of sprite is
   signal state, next_state : state_t;
 
   -- sprite RAM signals
-  signal sprite_ram_addr : std_logic_vector(SPRITE_RAM_ADDR_WIDTH-1 downto 0);
-  signal sprite_ram_dout : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0);
-
-  -- tile ROM signals
-  signal rom_addr : std_logic_vector(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
-  signal rom_dout : std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
+  signal sprite_ram_addr : std_logic_vector(SPRITE_RAM_GPU_ADDR_WIDTH-1 downto 0);
+  signal sprite_ram_dout : std_logic_vector(SPRITE_RAM_GPU_DATA_WIDTH-1 downto 0);
 
   -- frame buffer signals
   signal frame_buffer_addr_rd : std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
@@ -81,14 +81,14 @@ architecture arch of sprite is
   signal sprite : sprite_t;
 
   -- control signals
-  signal frame_done : std_logic;
+  signal frame_done    : std_logic;
   signal blitter_start : std_logic;
-  signal blitter_ready  : std_logic;
+  signal blitter_ready : std_logic;
 begin
   sprite_ram : entity work.single_port_rom
   generic map (
-    ADDR_WIDTH => SPRITE_RAM_ADDR_WIDTH,
-    DATA_WIDTH => SPRITE_RAM_DATA_WIDTH,
+    ADDR_WIDTH => SPRITE_RAM_GPU_ADDR_WIDTH,
+    DATA_WIDTH => SPRITE_RAM_GPU_DATA_WIDTH,
     INIT_FILE  => "rom/sprites.mif",
 
     -- XXX: for debugging
@@ -98,18 +98,6 @@ begin
     clk  => clk,
     addr => sprite_ram_addr,
     dout => sprite_ram_dout
-  );
-
-  tile_rom : entity work.single_port_rom
-  generic map (
-    ADDR_WIDTH => SPRITE_ROM_ADDR_WIDTH,
-    DATA_WIDTH => SPRITE_ROM_DATA_WIDTH,
-    INIT_FILE  => "rom/vid_6g.mif"
-  )
-  port map (
-    clk  => clk,
-    addr => rom_addr,
-    dout => rom_dout
   );
 
   sprite_frame_buffer : entity work.frame_buffer
@@ -139,7 +127,7 @@ begin
     ready             => blitter_ready,
     start             => blitter_start,
     rom_addr          => rom_addr,
-    rom_data          => rom_dout,
+    rom_data          => rom_data,
     frame_buffer_addr => frame_buffer_addr_wr,
     frame_buffer_data => frame_buffer_din,
     frame_buffer_wren => frame_buffer_wren

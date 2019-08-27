@@ -126,6 +126,18 @@ begin
     sdram_dqmh  => SDRAM_DQMH
   );
 
+  tile_rom : entity work.single_port_rom
+  generic map (
+    ADDR_WIDTH => SPRITE_ROM_ADDR_WIDTH,
+    DATA_WIDTH => SPRITE_ROM_DATA_WIDTH,
+    INIT_FILE  => "rom/vid_6g.mif"
+  )
+  port map (
+    clk  => sys_clk,
+    addr => sprite_rom_addr,
+    dout => sprite_rom_data
+  );
+
   -- video timing generator
   sync_gen : entity work.sync_gen
   port map (
@@ -139,6 +151,8 @@ begin
   port map (
     clk      => sys_clk,
     video    => video,
+    rom_addr => sprite_rom_addr,
+    rom_data => sprite_rom_data,
     priority => sprite_priority,
     data     => sprite_data
   );
