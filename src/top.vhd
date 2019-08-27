@@ -33,7 +33,20 @@ entity top is
 
     -- VGA signals
     vga_r, vga_g, vga_b : out std_logic_vector(5 downto 0);
-    vga_csync           : out std_logic
+    vga_csync           : out std_logic;
+
+    -- SDRAM interface
+    SDRAM_A    : out std_logic_vector(SDRAM_ADDR_WIDTH-1 downto 0);
+    SDRAM_BA   : out std_logic_vector(SDRAM_BANK_WIDTH-1 downto 0);
+    SDRAM_DQ   : inout std_logic_vector(SDRAM_DATA_WIDTH-1 downto 0);
+    SDRAM_CLK  : out std_logic;
+    SDRAM_nCS  : out std_logic;
+    SDRAM_nRAS : out std_logic;
+    SDRAM_nCAS : out std_logic;
+    SDRAM_nWE  : out std_logic;
+    SDRAM_CKE  : out std_logic;
+    SDRAM_DQML : out std_logic;
+    SDRAM_DQMH : out std_logic
   );
 end top;
 
@@ -43,8 +56,21 @@ architecture arch of top is
   signal sys_clk : std_logic;
   signal cen_6   : std_logic;
 
+  -- SDRAM signals
+  signal sdram_addr  : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
+  signal sdram_din   : std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0) := (others => '0');
+  signal sdram_dout  : std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
+  signal sdram_rden  : std_logic;
+  signal sdram_wren  : std_logic;
+  signal sdram_ready : std_logic;
+  signal sdram_valid : std_logic;
+
   -- video signals
   signal video : video_t;
+
+  -- ROM signals
+  signal sprite_rom_addr : std_logic_vector(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
+  signal sprite_rom_data : std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
 
   -- sprite priority data
   signal sprite_priority : priority_t;
@@ -70,6 +96,35 @@ begin
   clock_divider_6 : entity work.clock_divider
   generic map (DIVISOR => 2)
   port map (clk => sys_clk, cen => cen_6);
+
+  -- SDRAM controller
+  sdram : entity work.sdram
+  port map (
+    clk => rom_clk,
+
+    reset => '0',
+
+    -- IO interface
+    addr  => sdram_addr,
+    din   => sdram_din,
+    dout  => sdram_dout,
+    ready => sdram_ready,
+    valid => sdram_valid,
+    rden  => sdram_rden,
+    wren  => sdram_wren,
+
+    -- SDRAM interface
+    sdram_a     => SDRAM_A,
+    sdram_ba    => SDRAM_BA,
+    sdram_dq    => SDRAM_DQ,
+    sdram_cke   => SDRAM_CKE,
+    sdram_cs_n  => SDRAM_nCS,
+    sdram_ras_n => SDRAM_nRAS,
+    sdram_cas_n => SDRAM_nCAS,
+    sdram_we_n  => SDRAM_nWE,
+    sdram_dqml  => SDRAM_DQML,
+    sdram_dqmh  => SDRAM_DQMH
+  );
 
   -- video timing generator
   sync_gen : entity work.sync_gen
