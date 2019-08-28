@@ -40,10 +40,15 @@ use work.types.all;
 entity sprite is
   port (
     -- clock
-    clk : in std_logic;
+    clk   : in std_logic;
+    cen_6 : in std_logic;
 
     -- video signals
     video : in video_t;
+
+    -- sprite ROM
+    rom_addr : out std_logic_vector(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
+    rom_data : in std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
 
     -- graphics data
     priority : out priority_t;
@@ -58,12 +63,8 @@ architecture arch of sprite is
   signal state, next_state : state_t;
 
   -- sprite RAM signals
-  signal sprite_ram_addr : std_logic_vector(SPRITE_RAM_ADDR_WIDTH-1 downto 0);
-  signal sprite_ram_dout : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0);
-
-  -- tile ROM signals
-  signal rom_addr : std_logic_vector(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
-  signal rom_dout : std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
+  signal sprite_ram_addr : std_logic_vector(SPRITE_RAM_GPU_ADDR_WIDTH-1 downto 0);
+  signal sprite_ram_dout : std_logic_vector(SPRITE_RAM_GPU_DATA_WIDTH-1 downto 0);
 
   -- frame buffer signals
   signal frame_buffer_addr_rd : std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
@@ -75,20 +76,20 @@ architecture arch of sprite is
   signal frame_buffer_wren    : std_logic;
 
   -- sprite counter
-  signal sprite_counter : natural range 0 to 3;
+  signal sprite_counter : natural range 0 to 15;
 
   -- sprite descriptor
   signal sprite : sprite_t;
 
   -- control signals
-  signal frame_done : std_logic;
+  signal frame_done    : std_logic;
   signal blitter_start : std_logic;
-  signal blitter_ready  : std_logic;
+  signal blitter_ready : std_logic;
 begin
   sprite_ram : entity work.single_port_rom
   generic map (
-    ADDR_WIDTH => SPRITE_RAM_ADDR_WIDTH,
-    DATA_WIDTH => SPRITE_RAM_DATA_WIDTH,
+    ADDR_WIDTH => SPRITE_RAM_GPU_ADDR_WIDTH,
+    DATA_WIDTH => SPRITE_RAM_GPU_DATA_WIDTH,
     INIT_FILE  => "rom/sprites.mif",
 
     -- XXX: for debugging
@@ -98,18 +99,6 @@ begin
     clk  => clk,
     addr => sprite_ram_addr,
     dout => sprite_ram_dout
-  );
-
-  tile_rom : entity work.single_port_rom
-  generic map (
-    ADDR_WIDTH => SPRITE_ROM_ADDR_WIDTH,
-    DATA_WIDTH => SPRITE_ROM_DATA_WIDTH,
-    INIT_FILE  => "rom/vid_6g.mif"
-  )
-  port map (
-    clk  => clk,
-    addr => rom_addr,
-    dout => rom_dout
   );
 
   sprite_frame_buffer : entity work.frame_buffer
@@ -139,19 +128,11 @@ begin
     ready             => blitter_ready,
     start             => blitter_start,
     rom_addr          => rom_addr,
-    rom_data          => rom_dout,
+    rom_data          => rom_data,
     frame_buffer_addr => frame_buffer_addr_wr,
     frame_buffer_data => frame_buffer_din,
     frame_buffer_wren => frame_buffer_wren
   );
-
-  -- latch the next state
-  latch_state : process (clk)
-  begin
-    if rising_edge(clk) then
-      state <= next_state;
-    end if;
-  end process;
 
   -- state machine
   fsm : process (state, video.vblank, blitter_ready, frame_done)
@@ -199,6 +180,14 @@ begin
     end case;
   end process;
 
+  -- latch the next state
+  latch_next_state : process (clk)
+  begin
+    if rising_edge(clk) then
+      state <= next_state;
+    end if;
+  end process;
+
   -- Update the sprite counter.
   --
   -- Sprites are sorted from lowest to highest priority. If sprites are
@@ -236,11 +225,22 @@ begin
   end process;
 
   -- flip the frame buffer page
-  flip_frame_buffer: process(clk)
+  flip_frame_buffer : process (clk)
   begin
     if rising_edge(clk) then
       if state = FLIP then
         frame_buffer_flip <= not frame_buffer_flip;
+      end if;
+    end if;
+  end process;
+
+  -- latch graphics data from the frame buffer
+  latch_gfx_data : process (clk)
+  begin
+    if rising_edge(clk) then
+      if cen_6 = '1' then
+        priority <= unsigned(frame_buffer_dout(9 downto 8));
+        data     <= frame_buffer_dout(7 downto 0);
       end if;
     end if;
   end process;
@@ -251,13 +251,13 @@ begin
   -- the frame is done when all the sprites have been blitted
   frame_done <= '1' when sprite_counter = sprite_counter'high else '0';
 
-  -- set frame buffer read address
-  frame_buffer_addr_rd <= std_logic_vector(video.pos.y(7 downto 0) & video.pos.x(7 downto 0));
+  -- Load graphics data from the frame buffer.
+  --
+  -- While the current two pixels are being rendered, we need to fetch data for
+  -- the next two pixels, so they are loaded in time to render them on the
+  -- screen.
+  frame_buffer_addr_rd <= std_logic_vector(video.pos.y(7 downto 0) & (video.pos.x(7 downto 0)+2));
 
   -- read from the frame buffer when video output is enabled
-  frame_buffer_rden <= video.enable;
-
-  -- set layer data
-  priority <= unsigned(frame_buffer_dout(9 downto 8));
-  data     <= frame_buffer_dout(7 downto 0);
-end arch;
+  frame_buffer_rden <= cen_6 and video.enable;
+end architecture arch;

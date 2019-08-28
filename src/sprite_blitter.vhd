@@ -45,7 +45,7 @@ entity sprite_blitter is
     ready : out std_logic;
     start : in std_logic;
 
-    -- data in
+    -- sprite ROM
     rom_addr : out std_logic_vector(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
     rom_data : in std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
 

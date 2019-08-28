@@ -21,14 +21,32 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use ieee.math_real.all;
 
 package types is
-  constant SPRITE_RAM_ADDR_WIDTH   : natural := 4;
-  constant SPRITE_RAM_DATA_WIDTH   : natural := 64;
-  constant SPRITE_ROM_ADDR_WIDTH   : natural := 13;
-  constant SPRITE_ROM_DATA_WIDTH   : natural := 32;
+  -- SDRAM interface
+  constant SDRAM_BANK_WIDTH : natural := 2;
+  constant SDRAM_ADDR_WIDTH : natural := 13;
+  constant SDRAM_DATA_WIDTH : natural := 16;
+  constant SDRAM_COL_WIDTH  : natural := 9;
+  constant SDRAM_ROW_WIDTH  : natural := 13;
+
+  -- controller interface
+  constant SDRAM_INPUT_ADDR_WIDTH  : natural := 25; -- 32MB
+  constant SDRAM_INPUT_DATA_WIDTH  : natural := 16;
+  constant SDRAM_OUTPUT_DATA_WIDTH : natural := 32;
+
+  constant SPRITE_RAM_GPU_ADDR_WIDTH : natural := 4;
+  constant SPRITE_RAM_GPU_DATA_WIDTH : natural := 64;
+  constant SPRITE_ROM_ADDR_WIDTH     : natural := 13; -- 128kB
+  constant SPRITE_ROM_DATA_WIDTH     : natural := 32;
+
   constant FRAME_BUFFER_ADDR_WIDTH : natural := 16;
   constant FRAME_BUFFER_DATA_WIDTH : natural := 10;
+
+  constant CHAR_ROM_ADDR_WIDTH : natural := 11; -- 32kB
+  constant FG_ROM_ADDR_WIDTH   : natural := 13; -- 128kB
+  constant BG_ROM_ADDR_WIDTH   : natural := 13; -- 128kB
 
   -- sprite byte 0
   constant SPRITE_HI_CODE_MSB : natural := 7;
@@ -109,14 +127,22 @@ package types is
     enable : std_logic;
   end record video_t;
 
+  -- calculates the log2 of the given number
+  function ilog2(n : natural) return natural;
+
   -- calculate sprite size (8x8, 16x16, 32x32, 64x64)
   function sprite_size_in_pixels(size : std_logic_vector(1 downto 0)) return natural;
 
   -- initialise sprite from a raw 64-bit value
-  function init_sprite(data : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0)) return sprite_t;
+  function init_sprite(data : std_logic_vector(SPRITE_RAM_GPU_DATA_WIDTH-1 downto 0)) return sprite_t;
 end package types;
 
 package body types is
+  function ilog2(n : natural) return natural is
+  begin
+    return natural(log2(real(n)));
+  end ilog2;
+
   function sprite_size_in_pixels(size : std_logic_vector(1 downto 0)) return natural is
   begin
     case size is
@@ -143,7 +169,7 @@ package body types is
   --       5 | xxxxxxxx | lo pos x
   --       6 | -------- |
   --       7 | -------- |
-  function init_sprite(data : std_logic_vector(SPRITE_RAM_DATA_WIDTH-1 downto 0)) return sprite_t is
+  function init_sprite(data : std_logic_vector(SPRITE_RAM_GPU_DATA_WIDTH-1 downto 0)) return sprite_t is
     variable sprite : sprite_t;
   begin
     sprite.code     := unsigned(data(SPRITE_HI_CODE_MSB downto SPRITE_HI_CODE_LSB)) & unsigned(data(SPRITE_LO_CODE_MSB downto SPRITE_LO_CODE_LSB));
