@@ -246,7 +246,7 @@ begin
   sprite_rom_data <= sdram_dout;
 
   sdram_addr <= std_logic_vector(resize(unsigned(load_rom_addr), sdram_addr'length)) when state = WRITE else
-                std_logic_vector(resize(unsigned(sprite_rom_addr), sdram_addr'length));
+                std_logic_vector(resize(unsigned(sprite_rom_addr & '0'), sdram_addr'length));
 
   sdram_din  <= load_rom_data;
   sdram_rden <= '1' when state = READ else '0';
