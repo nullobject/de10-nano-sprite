@@ -70,6 +70,11 @@ architecture arch of top is
   -- counters
   signal data_counter : natural range 0 to 16384;
 
+  -- IOCTL signals
+  signal ioctl_addr : std_logic_vector(21 downto 0);
+  signal ioctl_data : std_logic_vector(15 downto 0);
+  signal ioctl_we   : std_logic;
+
   -- SDRAM signals
   signal sdram_addr  : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
   signal sdram_din   : std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0) := (others => '0');
@@ -157,6 +162,36 @@ begin
     sdram_we_n  => SDRAM_nWE,
     sdram_dqml  => SDRAM_DQML,
     sdram_dqmh  => SDRAM_DQMH
+  );
+
+  -- ROM controller
+  rom_controller : entity work.rom_controller
+  port map (
+    clk => rom_clk,
+
+    reset => reset,
+
+    -- read interface
+    sprite_rom_addr => sprite_rom_addr,
+    sprite_rom_data => sprite_rom_data,
+    char_rom_addr   => (others => '0'),
+    char_rom_data   => open,
+    fg_rom_addr     => (others => '0'),
+    fg_rom_data     => open,
+    bg_rom_addr     => (others => '0'),
+    bg_rom_data     => open,
+
+    -- write interface
+    ioctl_addr => ioctl_addr,
+    ioctl_data => ioctl_data,
+    ioctl_we   => ioctl_we,
+
+    -- SDRAM interface
+    sdram_addr  => sdram_addr,
+    sdram_din   => sdram_din,
+    sdram_dout  => sdram_dout,
+    sdram_valid => sdram_valid,
+    sdram_ready => sdram_ready
   );
 
   tile_rom : entity work.single_port_rom
@@ -260,12 +295,10 @@ begin
 
   load_rom_addr <= std_logic_vector(to_unsigned(data_counter, load_rom_addr'length));
 
-  sprite_rom_data <= sdram_dout;
+  ioctl_addr <= std_logic_vector(resize(unsigned(load_rom_addr), ioctl_addr'length));
+  ioctl_data <= load_rom_data;
+  ioctl_we   <= '1' when state = WRITE else '0';
 
-  sdram_addr <= std_logic_vector(resize(unsigned(load_rom_addr), sdram_addr'length)) when state = WRITE else
-                std_logic_vector(resize(unsigned(sprite_rom_addr & '0'), sdram_addr'length));
-
-  sdram_din  <= load_rom_data;
   sdram_rden <= '1' when state = READ else '0';
   sdram_wren <= '1' when state = WRITE else '0';
 

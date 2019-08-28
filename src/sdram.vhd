@@ -43,7 +43,7 @@ entity sdram is
     -- controller interface
     addr  : in std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
     din   : in std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
-    dout  : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0) := (others => '0');
+    dout  : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
     valid : out std_logic;
     ready : out std_logic;
     rden  : in std_logic;
@@ -149,10 +149,10 @@ architecture arch of sdram is
   signal refresh_counter : natural range 0 to 1023;
 
   -- registers
-  signal addr_reg       : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal din_reg        : std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
-  signal first_word_reg : std_logic_vector(SDRAM_DATA_WIDTH-1 downto 0);
-  signal wren_reg       : std_logic;
+  signal addr_reg : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
+  signal din_reg  : std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
+  signal dout_reg : std_logic_vector(SDRAM_DATA_WIDTH-1 downto 0);
+  signal wren_reg : std_logic;
 
   -- aliases to decode the address register
   alias col  : std_logic_vector(SDRAM_COL_WIDTH-1 downto 0) is addr_reg(SDRAM_COL_WIDTH-1 downto 0);
@@ -299,9 +299,7 @@ begin
   begin
     if rising_edge(clk) then
       if state = READ_WAIT and first_word = '1' then
-        first_word_reg <= sdram_dq;
-      elsif state = READ_WAIT and read_done = '1' then
-        dout <= first_word_reg & sdram_dq;
+        dout_reg <= sdram_dq;
       end if;
     end if;
   end process;
@@ -319,6 +317,9 @@ begin
 
   -- the memory controller is ready if we're in the IDLE state
   ready <= '1' when state = IDLE else '0';
+
+  -- set output data
+  dout <= dout_reg & sdram_dq;
 
   -- deassert the clock enable at the beginning of the initialisation sequence
   sdram_cke <= '0' when state = INIT and wait_counter = 0 else '1';
@@ -340,11 +341,11 @@ begin
       "0010000000000" when INIT,
       MODE_REG        when MODE,
       row             when ACTIVE,
-      "0010" & col    when READ, -- auto precharge
-      "0010" & col    when WRITE, -- auto precharge
+      "0010" & col    when READ,   -- auto precharge
+      "0010" & col    when WRITE,  -- auto precharge
       (others => '0') when others;
 
-  -- set SDRAM input data if we're writing, otherwise put it into a high impedance state
+  -- set SDRAM input data if we're writing, otherwise set it to high impedance
   sdram_dq <= din_reg when state = WRITE else (others => 'Z');
 
   -- set SDRAM data mask
