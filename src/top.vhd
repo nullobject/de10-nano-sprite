@@ -60,6 +60,7 @@ architecture arch of top is
   signal rom_clk : std_logic;
   signal sys_clk : std_logic;
   signal cen_6   : std_logic;
+  signal cen_4   : std_logic;
 
   signal reset : std_logic;
 
@@ -122,6 +123,11 @@ begin
   clock_divider_6 : entity work.clock_divider
   generic map (DIVISOR => 2)
   port map (clk => sys_clk, cen => cen_6);
+
+  -- generate a 4MHz clock enable signal
+  clock_divider_4 : entity work.clock_divider
+  generic map (DIVISOR => 3)
+  port map (clk => sys_clk, cen => cen_4);
 
   -- SDRAM controller
   sdram : entity work.sdram
@@ -211,7 +217,7 @@ begin
     if reset = '1' then
       state <= INIT;
     elsif rising_edge(sys_clk) then
-      if cen_6 = '1' then
+      if cen_4 = '1' then
         state <= next_state;
       end if;
     end if;
@@ -222,7 +228,7 @@ begin
     if reset = '1' then
       data_counter <= 0;
     elsif rising_edge(sys_clk) then
-      if cen_6 = '1' then
+      if cen_4 = '1' then
         if state /= next_state then -- state changing
           data_counter <= 0;
         else
