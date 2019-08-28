@@ -76,7 +76,7 @@ architecture arch of sprite is
   signal frame_buffer_wren    : std_logic;
 
   -- sprite counter
-  signal sprite_counter : natural range 0 to 3;
+  signal sprite_counter : natural range 0 to 15;
 
   -- sprite descriptor
   signal sprite : sprite_t;
