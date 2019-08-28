@@ -124,6 +124,7 @@ begin
   sprite_biltter : entity work.sprite_blitter
   port map (
     clk               => clk,
+    cen_6             => cen_6,
     sprite            => sprite,
     ready             => blitter_ready,
     start             => blitter_start,
@@ -184,7 +185,9 @@ begin
   latch_next_state : process (clk)
   begin
     if rising_edge(clk) then
-      state <= next_state;
+      if cen_6 = '1' then
+        state <= next_state;
+      end if;
     end if;
   end process;
 
@@ -196,8 +199,10 @@ begin
   update_sprite_counter : process (clk)
   begin
     if rising_edge(clk) then
-      if state = JUMP then
-        sprite_counter <= sprite_counter + 1;
+      if cen_6 = '1' then
+        if state = JUMP then
+          sprite_counter <= sprite_counter + 1;
+        end if;
       end if;
     end if;
   end process;
@@ -206,8 +211,10 @@ begin
   latch_sprite : process (clk)
   begin
     if rising_edge(clk) then
-      if state = LATCH then
-        sprite <= init_sprite(sprite_ram_dout);
+      if cen_6 = '1' then
+        if state = LATCH then
+          sprite <= init_sprite(sprite_ram_dout);
+        end if;
       end if;
     end if;
   end process;
@@ -216,10 +223,12 @@ begin
   blit_sprite : process (clk)
   begin
     if rising_edge(clk) then
-      if state = LOAD then
-        blitter_start <= '1';
-      else
-        blitter_start <= '0';
+      if cen_6 = '1' then
+        if state = LOAD then
+          blitter_start <= '1';
+        else
+          blitter_start <= '0';
+        end if;
       end if;
     end if;
   end process;
@@ -228,8 +237,10 @@ begin
   flip_frame_buffer : process (clk)
   begin
     if rising_edge(clk) then
-      if state = FLIP then
-        frame_buffer_flip <= not frame_buffer_flip;
+      if cen_6 = '1' then
+        if state = FLIP then
+          frame_buffer_flip <= not frame_buffer_flip;
+        end if;
       end if;
     end if;
   end process;
