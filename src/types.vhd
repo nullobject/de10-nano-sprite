@@ -24,14 +24,16 @@ use ieee.numeric_std.all;
 use ieee.math_real.all;
 
 package types is
-  -- SDRAM interface
-  constant SDRAM_BANK_WIDTH : natural := 2;
-  constant SDRAM_ADDR_WIDTH : natural := 13;
-  constant SDRAM_DATA_WIDTH : natural := 16;
-  constant SDRAM_COL_WIDTH  : natural := 9;
-  constant SDRAM_ROW_WIDTH  : natural := 13;
+  -- IOCTL
+  constant IOCTL_ADDR_WIDTH : natural := 22;
+  constant IOCTL_DATA_WIDTH : natural := 16;
 
-  -- controller interface
+  -- SDRAM
+  constant SDRAM_BANK_WIDTH        : natural := 2;
+  constant SDRAM_ADDR_WIDTH        : natural := 13;
+  constant SDRAM_DATA_WIDTH        : natural := 16;
+  constant SDRAM_COL_WIDTH         : natural := 9;
+  constant SDRAM_ROW_WIDTH         : natural := 13;
   constant SDRAM_INPUT_ADDR_WIDTH  : natural := 25; -- 32MB
   constant SDRAM_INPUT_DATA_WIDTH  : natural := 16;
   constant SDRAM_OUTPUT_DATA_WIDTH : natural := 32;

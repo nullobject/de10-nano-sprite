@@ -46,7 +46,7 @@ entity sprite is
     -- video signals
     video : in video_t;
 
-    -- sprite ROM
+    -- tile ROM
     rom_addr : out std_logic_vector(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
     rom_data : in std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
 

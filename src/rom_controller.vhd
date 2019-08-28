@@ -53,8 +53,8 @@ entity rom_controller is
     bg_rom_data     : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
 
     -- write interface
-    ioctl_addr : in std_logic_vector(21 downto 0);
-    ioctl_data : in std_logic_vector(15 downto 0);
+    ioctl_addr : in std_logic_vector(IOCTL_ADDR_WIDTH-1 downto 0);
+    ioctl_data : in std_logic_vector(IOCTL_DATA_WIDTH-1 downto 0);
     ioctl_we   : in std_logic;
 
     -- SDRAM interface
@@ -73,16 +73,17 @@ architecture arch of rom_controller is
   -- currently enabled ROM
   signal current_rom : rom_t;
 
-  signal ioctl_addr_reg : std_logic_vector(21 downto 0);
+  -- chip select signals
+  signal sprite_rom_cs : std_logic;
+  signal char_rom_cs   : std_logic;
+  signal fg_rom_cs     : std_logic;
+  signal bg_rom_cs     : std_logic;
 
-  -- segment signals
-  signal sprite_rom_cs         : std_logic;
+  -- address mux signals
+  signal ioctl_sdram_addr      : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
   signal sprite_rom_sdram_addr : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal char_rom_cs           : std_logic;
   signal char_rom_sdram_addr   : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal fg_rom_cs             : std_logic;
   signal fg_rom_sdram_addr     : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal bg_rom_cs             : std_logic;
   signal bg_rom_sdram_addr     : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
 begin
   sprite_rom_segment : entity work.segment
@@ -187,10 +188,10 @@ begin
   sdram_din <= ioctl_data;
 
   -- set the IOCTL address if we're writing, otherwise set it to zero
-  ioctl_addr_reg <= ioctl_addr when ioctl_we = '1' else (others => '0');
+  ioctl_sdram_addr <= std_logic_vector(resize(unsigned(ioctl_addr), ioctl_sdram_addr'length)) when ioctl_we = '1' else (others => '0');
 
-  -- set SDRAM address
-  sdram_addr <= ioctl_addr_reg or
+  -- mux the SDRAM address
+  sdram_addr <= ioctl_sdram_addr or
                 sprite_rom_sdram_addr or
                 char_rom_sdram_addr or
                 fg_rom_sdram_addr or

@@ -71,8 +71,8 @@ architecture arch of top is
   signal data_counter : natural range 0 to 16384;
 
   -- IOCTL signals
-  signal ioctl_addr : std_logic_vector(21 downto 0);
-  signal ioctl_data : std_logic_vector(15 downto 0);
+  signal ioctl_addr : std_logic_vector(IOCTL_ADDR_WIDTH-1 downto 0);
+  signal ioctl_data : std_logic_vector(IOCTL_DATA_WIDTH-1 downto 0);
   signal ioctl_we   : std_logic;
 
   -- SDRAM signals
