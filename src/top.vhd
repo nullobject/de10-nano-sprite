@@ -96,6 +96,16 @@ architecture arch of top is
 
   -- RGB data
   signal rgb : nibble_t;
+
+  -- debug
+  attribute keep : boolean;
+  attribute keep of rom_clk         : signal is true;
+  attribute keep of sys_clk         : signal is true;
+  attribute keep of cen_6           : signal is true;
+  attribute keep of load_rom_addr   : signal is true;
+  attribute keep of load_rom_data   : signal is true;
+  attribute keep of sprite_rom_addr : signal is true;
+  attribute keep of sprite_rom_data : signal is true;
 begin
   -- generate a 12MHz clock signal
   my_pll : entity pll.pll
@@ -167,6 +177,7 @@ begin
   sprite_layer : entity work.sprite
   port map (
     clk      => sys_clk,
+    cen_6    => cen_6,
     video    => video,
     rom_addr => sprite_rom_addr,
     rom_data => sprite_rom_data,

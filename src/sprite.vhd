@@ -40,7 +40,8 @@ use work.types.all;
 entity sprite is
   port (
     -- clock
-    clk : in std_logic;
+    clk   : in std_logic;
+    cen_6 : in std_logic;
 
     -- video signals
     video : in video_t;
@@ -133,14 +134,6 @@ begin
     frame_buffer_wren => frame_buffer_wren
   );
 
-  -- latch the next state
-  latch_state : process (clk)
-  begin
-    if rising_edge(clk) then
-      state <= next_state;
-    end if;
-  end process;
-
   -- state machine
   fsm : process (state, video.vblank, blitter_ready, frame_done)
   begin
@@ -187,6 +180,14 @@ begin
     end case;
   end process;
 
+  -- latch the next state
+  latch_next_state : process (clk)
+  begin
+    if rising_edge(clk) then
+      state <= next_state;
+    end if;
+  end process;
+
   -- Update the sprite counter.
   --
   -- Sprites are sorted from lowest to highest priority. If sprites are
@@ -224,11 +225,22 @@ begin
   end process;
 
   -- flip the frame buffer page
-  flip_frame_buffer: process(clk)
+  flip_frame_buffer : process (clk)
   begin
     if rising_edge(clk) then
       if state = FLIP then
         frame_buffer_flip <= not frame_buffer_flip;
+      end if;
+    end if;
+  end process;
+
+  -- latch graphics data from the frame buffer
+  latch_gfx_data : process (clk)
+  begin
+    if rising_edge(clk) then
+      if cen_6 = '1' then
+        priority <= unsigned(frame_buffer_dout(9 downto 8));
+        data     <= frame_buffer_dout(7 downto 0);
       end if;
     end if;
   end process;
@@ -239,13 +251,13 @@ begin
   -- the frame is done when all the sprites have been blitted
   frame_done <= '1' when sprite_counter = sprite_counter'high else '0';
 
-  -- set frame buffer read address
-  frame_buffer_addr_rd <= std_logic_vector(video.pos.y(7 downto 0) & video.pos.x(7 downto 0));
+  -- Load graphics data from the frame buffer.
+  --
+  -- While the current two pixels are being rendered, we need to fetch data for
+  -- the next two pixels, so they are loaded in time to render them on the
+  -- screen.
+  frame_buffer_addr_rd <= std_logic_vector(video.pos.y(7 downto 0) & (video.pos.x(7 downto 0)+2));
 
   -- read from the frame buffer when video output is enabled
-  frame_buffer_rden <= video.enable;
-
-  -- set layer data
-  priority <= unsigned(frame_buffer_dout(9 downto 8));
-  data     <= frame_buffer_dout(7 downto 0);
-end arch;
+  frame_buffer_rden <= cen_6 and video.enable;
+end architecture arch;
