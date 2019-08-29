@@ -65,7 +65,5 @@ begin
   end process;
 
   -- set SDRAM address
-  --
-  -- TODO: this should be done in the SDRAM module
-  sdram_addr <= std_logic_vector(resize(unsigned(rom_addr & '0'), sdram_addr'length)+SEGMENT_OFFSET) when cs = '1' else (others => '0');
+  sdram_addr <= std_logic_vector(resize(unsigned(rom_addr), sdram_addr'length)+SEGMENT_OFFSET) when cs = '1' else (others => '0');
 end architecture arch;

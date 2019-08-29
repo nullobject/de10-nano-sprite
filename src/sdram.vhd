@@ -283,8 +283,14 @@ begin
   begin
     if rising_edge(clk) then
       if state = IDLE then
-        addr_reg <= addr;
-        din_reg  <= din;
+        if we = '1' then
+          -- we want to address 16-bit words during a write operation
+          addr_reg <= addr;
+        else
+          -- we want to address 32-bit words during a read operation
+          addr_reg <= std_logic_vector(shift_left(unsigned(addr), 1));
+        end if;
+        din_reg <= din;
         we_reg  <= we;
       end if;
     end if;
