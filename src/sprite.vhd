@@ -47,7 +47,7 @@ entity sprite is
     video : in video_t;
 
     -- tile ROM
-    rom_addr : out std_logic_vector(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
+    rom_addr : out unsigned(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
     rom_data : in std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
 
     -- graphics data
@@ -63,12 +63,12 @@ architecture arch of sprite is
   signal state, next_state : state_t;
 
   -- sprite RAM signals
-  signal sprite_ram_addr : std_logic_vector(SPRITE_RAM_GPU_ADDR_WIDTH-1 downto 0);
+  signal sprite_ram_addr : unsigned(SPRITE_RAM_GPU_ADDR_WIDTH-1 downto 0);
   signal sprite_ram_dout : std_logic_vector(SPRITE_RAM_GPU_DATA_WIDTH-1 downto 0);
 
   -- frame buffer signals
-  signal frame_buffer_addr_rd : std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
-  signal frame_buffer_addr_wr : std_logic_vector(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
+  signal frame_buffer_addr_rd : unsigned(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
+  signal frame_buffer_addr_wr : unsigned(FRAME_BUFFER_ADDR_WIDTH-1 downto 0);
   signal frame_buffer_din     : std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0);
   signal frame_buffer_dout    : std_logic_vector(FRAME_BUFFER_DATA_WIDTH-1 downto 0);
   signal frame_buffer_flip    : std_logic;
@@ -257,7 +257,7 @@ begin
   end process;
 
   -- set sprite RAM address
-  sprite_ram_addr <= std_logic_vector(to_unsigned(sprite_counter, sprite_ram_addr'length));
+  sprite_ram_addr <= to_unsigned(sprite_counter, sprite_ram_addr'length);
 
   -- the frame is done when all the sprites have been blitted
   frame_done <= '1' when sprite_counter = sprite_counter'high else '0';
@@ -267,7 +267,7 @@ begin
   -- While the current two pixels are being rendered, we need to fetch data for
   -- the next two pixels, so they are loaded in time to render them on the
   -- screen.
-  frame_buffer_addr_rd <= std_logic_vector(video.pos.y(7 downto 0) & (video.pos.x(7 downto 0)+2));
+  frame_buffer_addr_rd <= video.pos.y(7 downto 0) & (video.pos.x(7 downto 0)+2);
 
   -- read from the frame buffer when video output is enabled
   frame_buffer_rden <= cen_6 and video.enable;

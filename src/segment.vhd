@@ -42,11 +42,11 @@ entity segment is
     cs : in std_logic;
 
     -- ROM interface
-    rom_addr : in std_logic_vector(ROM_ADDR_WIDTH-1 downto 0);
+    rom_addr : in unsigned(ROM_ADDR_WIDTH-1 downto 0);
     rom_data : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
 
     -- SDRAM interface
-    sdram_addr  : out std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
+    sdram_addr  : out unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
     sdram_data  : in std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
     sdram_valid : in std_logic
   );
@@ -65,5 +65,5 @@ begin
   end process;
 
   -- set SDRAM address
-  sdram_addr <= std_logic_vector(resize(unsigned(rom_addr), sdram_addr'length)+SEGMENT_OFFSET) when cs = '1' else (others => '0');
+  sdram_addr <= resize(rom_addr, sdram_addr'length)+SEGMENT_OFFSET when cs = '1' else (others => '0');
 end architecture arch;

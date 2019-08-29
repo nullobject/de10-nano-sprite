@@ -39,8 +39,8 @@ entity top is
     key : in std_logic_vector(0 downto 0);
 
     -- SDRAM interface
-    SDRAM_A    : out std_logic_vector(SDRAM_ADDR_WIDTH-1 downto 0);
-    SDRAM_BA   : out std_logic_vector(SDRAM_BANK_WIDTH-1 downto 0);
+    SDRAM_A    : out unsigned(SDRAM_ADDR_WIDTH-1 downto 0);
+    SDRAM_BA   : out unsigned(SDRAM_BANK_WIDTH-1 downto 0);
     SDRAM_DQ   : inout std_logic_vector(SDRAM_DATA_WIDTH-1 downto 0);
     SDRAM_CLK  : out std_logic;
     SDRAM_nCS  : out std_logic;
@@ -71,12 +71,12 @@ architecture arch of top is
   signal data_counter : natural range 0 to 16384;
 
   -- IOCTL signals
-  signal ioctl_addr : std_logic_vector(IOCTL_ADDR_WIDTH-1 downto 0);
+  signal ioctl_addr : unsigned(IOCTL_ADDR_WIDTH-1 downto 0);
   signal ioctl_data : std_logic_vector(IOCTL_DATA_WIDTH-1 downto 0);
   signal ioctl_we   : std_logic;
 
   -- SDRAM signals
-  signal sdram_addr  : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
+  signal sdram_addr  : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
   signal sdram_din   : std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0) := (others => '0');
   signal sdram_dout  : std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
   signal sdram_we    : std_logic;
@@ -87,10 +87,10 @@ architecture arch of top is
   signal video : video_t;
 
   -- ROM signals
-  signal sprite_rom_addr : std_logic_vector(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
+  signal sprite_rom_addr : unsigned(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
   signal sprite_rom_data : std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
 
-  signal load_rom_addr : std_logic_vector(13 downto 0);
+  signal load_rom_addr : unsigned(13 downto 0);
   signal load_rom_data : std_logic_vector(15 downto 0);
 
   -- sprite priority data
@@ -292,9 +292,9 @@ begin
 
   reset <= not key(0);
 
-  load_rom_addr <= std_logic_vector(to_unsigned(data_counter, load_rom_addr'length));
+  load_rom_addr <= to_unsigned(data_counter, load_rom_addr'length);
 
-  ioctl_addr <= std_logic_vector(resize(unsigned(load_rom_addr), ioctl_addr'length));
+  ioctl_addr <= resize(load_rom_addr, ioctl_addr'length);
   ioctl_data <= load_rom_data;
   ioctl_we   <= '1' when state = WRITE else '0';
 
