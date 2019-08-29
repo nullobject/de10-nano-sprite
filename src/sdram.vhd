@@ -41,7 +41,7 @@ entity sdram is
     reset : in std_logic;
 
     -- controller interface
-    addr  : in std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
+    addr  : in unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
     din   : in std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
     dout  : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
     we    : in std_logic;
@@ -49,8 +49,8 @@ entity sdram is
     ready : out std_logic;
 
     -- SDRAM interface
-    sdram_a     : out std_logic_vector(SDRAM_ADDR_WIDTH-1 downto 0);
-    sdram_ba    : out std_logic_vector(SDRAM_BANK_WIDTH-1 downto 0);
+    sdram_a     : out unsigned(SDRAM_ADDR_WIDTH-1 downto 0);
+    sdram_ba    : out unsigned(SDRAM_BANK_WIDTH-1 downto 0);
     sdram_dq    : inout std_logic_vector(SDRAM_DATA_WIDTH-1 downto 0);
     sdram_cke   : out std_logic;
     sdram_cs_n  : out std_logic;
@@ -95,13 +95,13 @@ architecture arch of sdram is
   constant WRITE_BURST_MODE : std_logic := '1'; -- 0=burst, 1=single
 
   -- the value written to the mode register to configure the memory
-  constant MODE_REG : std_logic_vector(SDRAM_ADDR_WIDTH-1 downto 0) := (
+  constant MODE_REG : unsigned(SDRAM_ADDR_WIDTH-1 downto 0) := (
     "000" &
     WRITE_BURST_MODE &
     "00" &
-    std_logic_vector(to_unsigned(CAS_LATENCY, 3)) &
+    to_unsigned(CAS_LATENCY, 3) &
     BURST_TYPE &
-    std_logic_vector(to_unsigned(ilog2(BURST_LENGTH), 3))
+    to_unsigned(ilog2(BURST_LENGTH), 3)
   );
 
   -- calculate the clock period in nanoseconds
@@ -148,15 +148,15 @@ architecture arch of sdram is
   signal refresh_counter : natural range 0 to 1023;
 
   -- registers
-  signal addr_reg : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
+  signal addr_reg : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
   signal din_reg  : std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
   signal dout_reg : std_logic_vector(SDRAM_DATA_WIDTH-1 downto 0);
   signal we_reg   : std_logic;
 
   -- aliases to decode the address register
-  alias col  : std_logic_vector(SDRAM_COL_WIDTH-1 downto 0) is addr_reg(SDRAM_COL_WIDTH-1 downto 0);
-  alias row  : std_logic_vector(SDRAM_ROW_WIDTH-1 downto 0) is addr_reg(SDRAM_COL_WIDTH+SDRAM_ROW_WIDTH-1 downto SDRAM_COL_WIDTH);
-  alias bank : std_logic_vector(SDRAM_BANK_WIDTH-1 downto 0) is addr_reg(SDRAM_COL_WIDTH+SDRAM_ROW_WIDTH+SDRAM_BANK_WIDTH-1 downto SDRAM_COL_WIDTH+SDRAM_ROW_WIDTH);
+  alias col  : unsigned(SDRAM_COL_WIDTH-1 downto 0) is addr_reg(SDRAM_COL_WIDTH-1 downto 0);
+  alias row  : unsigned(SDRAM_ROW_WIDTH-1 downto 0) is addr_reg(SDRAM_COL_WIDTH+SDRAM_ROW_WIDTH-1 downto SDRAM_COL_WIDTH);
+  alias bank : unsigned(SDRAM_BANK_WIDTH-1 downto 0) is addr_reg(SDRAM_COL_WIDTH+SDRAM_ROW_WIDTH+SDRAM_BANK_WIDTH-1 downto SDRAM_COL_WIDTH+SDRAM_ROW_WIDTH);
 begin
   -- state machine
   fsm : process (state, wait_counter, we_reg, load_mode_done, active_done, refresh_done, read_done, should_refresh)
@@ -288,7 +288,7 @@ begin
           addr_reg <= addr;
         else
           -- we want to address 32-bit words during a read operation
-          addr_reg <= std_logic_vector(shift_left(unsigned(addr), 1));
+          addr_reg <= shift_left(addr, 1);
         end if;
         din_reg <= din;
         we_reg  <= we;

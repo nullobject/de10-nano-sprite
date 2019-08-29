@@ -43,22 +43,22 @@ entity rom_controller is
     reset : in std_logic;
 
     -- read interface
-    sprite_rom_addr : in std_logic_vector(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
+    sprite_rom_addr : in unsigned(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
     sprite_rom_data : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
-    char_rom_addr   : in std_logic_vector(CHAR_ROM_ADDR_WIDTH-1 downto 0);
+    char_rom_addr   : in unsigned(CHAR_ROM_ADDR_WIDTH-1 downto 0);
     char_rom_data   : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
-    fg_rom_addr     : in std_logic_vector(FG_ROM_ADDR_WIDTH-1 downto 0);
+    fg_rom_addr     : in unsigned(FG_ROM_ADDR_WIDTH-1 downto 0);
     fg_rom_data     : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
-    bg_rom_addr     : in std_logic_vector(BG_ROM_ADDR_WIDTH-1 downto 0);
+    bg_rom_addr     : in unsigned(BG_ROM_ADDR_WIDTH-1 downto 0);
     bg_rom_data     : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
 
     -- write interface
-    ioctl_addr : in std_logic_vector(IOCTL_ADDR_WIDTH-1 downto 0);
+    ioctl_addr : in unsigned(IOCTL_ADDR_WIDTH-1 downto 0);
     ioctl_data : in std_logic_vector(IOCTL_DATA_WIDTH-1 downto 0);
     ioctl_we   : in std_logic;
 
     -- SDRAM interface
-    sdram_addr  : out std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
+    sdram_addr  : out unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
     sdram_din   : out std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
     sdram_dout  : in std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
     sdram_we    : out std_logic;
@@ -81,11 +81,11 @@ architecture arch of rom_controller is
   signal bg_rom_cs     : std_logic;
 
   -- address mux signals
-  signal ioctl_sdram_addr      : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal sprite_rom_sdram_addr : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal char_rom_sdram_addr   : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal fg_rom_sdram_addr     : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal bg_rom_sdram_addr     : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
+  signal ioctl_sdram_addr      : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
+  signal sprite_rom_sdram_addr : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
+  signal char_rom_sdram_addr   : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
+  signal fg_rom_sdram_addr     : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
+  signal bg_rom_sdram_addr     : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
 begin
   sprite_rom_segment : entity work.segment
   generic map (
@@ -186,7 +186,7 @@ begin
   bg_rom_cs     <= '1' when current_rom = BG_ROM     and ioctl_we = '0' else '0';
 
   -- set the IOCTL address if we're writing, otherwise set it to zero
-  ioctl_sdram_addr <= std_logic_vector(resize(unsigned(ioctl_addr), ioctl_sdram_addr'length)) when ioctl_we = '1' else (others => '0');
+  ioctl_sdram_addr <= resize(ioctl_addr, ioctl_sdram_addr'length) when ioctl_we = '1' else (others => '0');
 
   -- mux the SDRAM address
   sdram_addr <= ioctl_sdram_addr or
