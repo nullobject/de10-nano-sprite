@@ -61,6 +61,7 @@ entity rom_controller is
     sdram_addr  : out std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
     sdram_din   : out std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
     sdram_dout  : in std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
+    sdram_we    : out std_logic;
     sdram_valid : in std_logic;
     sdram_ready : in std_logic
   );
@@ -184,9 +185,6 @@ begin
   fg_rom_cs     <= '1' when current_rom = FG_ROM     and ioctl_we = '0' else '0';
   bg_rom_cs     <= '1' when current_rom = BG_ROM     and ioctl_we = '0' else '0';
 
-  -- set the SDRAM input data
-  sdram_din <= ioctl_data;
-
   -- set the IOCTL address if we're writing, otherwise set it to zero
   ioctl_sdram_addr <= std_logic_vector(resize(unsigned(ioctl_addr), ioctl_sdram_addr'length)) when ioctl_we = '1' else (others => '0');
 
@@ -196,4 +194,10 @@ begin
                 char_rom_sdram_addr or
                 fg_rom_sdram_addr or
                 bg_rom_sdram_addr;
+
+  -- set the SDRAM input data
+  sdram_din <= ioctl_data;
+
+  -- enable writing to the SDRAM if data is being written to the IOCTL
+  sdram_we <= ioctl_we;
 end architecture arch;

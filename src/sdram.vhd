@@ -44,10 +44,9 @@ entity sdram is
     addr  : in std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
     din   : in std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
     dout  : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
+    we    : in std_logic;
     valid : out std_logic;
     ready : out std_logic;
-    rden  : in std_logic;
-    wren  : in std_logic;
 
     -- SDRAM interface
     sdram_a     : out std_logic_vector(SDRAM_ADDR_WIDTH-1 downto 0);
@@ -152,7 +151,7 @@ architecture arch of sdram is
   signal addr_reg : std_logic_vector(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
   signal din_reg  : std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
   signal dout_reg : std_logic_vector(SDRAM_DATA_WIDTH-1 downto 0);
-  signal wren_reg : std_logic;
+  signal we_reg   : std_logic;
 
   -- aliases to decode the address register
   alias col  : std_logic_vector(SDRAM_COL_WIDTH-1 downto 0) is addr_reg(SDRAM_COL_WIDTH-1 downto 0);
@@ -160,7 +159,7 @@ architecture arch of sdram is
   alias bank : std_logic_vector(SDRAM_BANK_WIDTH-1 downto 0) is addr_reg(SDRAM_COL_WIDTH+SDRAM_ROW_WIDTH+SDRAM_BANK_WIDTH-1 downto SDRAM_COL_WIDTH+SDRAM_ROW_WIDTH);
 begin
   -- state machine
-  fsm : process (state, wait_counter, rden, wren, wren_reg, load_mode_done, active_done, refresh_done, read_done, should_refresh)
+  fsm : process (state, wait_counter, we_reg, load_mode_done, active_done, refresh_done, read_done, should_refresh)
   begin
     next_state <= state;
 
@@ -192,7 +191,7 @@ begin
         if should_refresh = '1' then
           next_state <= REFRESH;
           next_cmd   <= CMD_AUTO_REFRESH;
-        elsif rden = '1' or wren = '1' then
+        else
           next_state <= ACTIVE;
           next_cmd   <= CMD_ACTIVE;
         end if;
@@ -206,7 +205,7 @@ begin
       -- activate the row
       when ACTIVE =>
         if active_done = '1' then
-          if wren_reg = '1' then
+          if we_reg = '1' then
             next_state <= WRITE;
             next_cmd   <= CMD_WRITE;
           else
@@ -286,7 +285,7 @@ begin
       if state = IDLE then
         addr_reg <= addr;
         din_reg  <= din;
-        wren_reg <= wren;
+        we_reg  <= we;
       end if;
     end if;
   end process;
