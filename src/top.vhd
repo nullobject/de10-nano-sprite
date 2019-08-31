@@ -57,7 +57,6 @@ architecture arch of top is
   type state_t is (INIT, LOAD, IDLE);
 
   -- clock signals
-  signal rom_clk : std_logic;
   signal sys_clk : std_logic;
   signal cen_6   : std_logic;
   signal cen_4   : std_logic;
@@ -103,7 +102,6 @@ architecture arch of top is
 
   -- debug
   attribute keep : boolean;
-  attribute keep of rom_clk         : signal is true;
   attribute keep of sys_clk         : signal is true;
   attribute keep of cen_6           : signal is true;
   attribute keep of load_rom_addr   : signal is true;
@@ -116,29 +114,27 @@ begin
   port map (
     refclk   => clk,
     rst      => '0',
-    outclk_0 => SDRAM_CLK,
-    outclk_1 => rom_clk,
-    outclk_2 => sys_clk,
+    outclk_0 => sys_clk,
+    outclk_1 => SDRAM_CLK,
     locked   => open
   );
 
   -- generate a 6MHz clock enable signal
   clock_divider_6 : entity work.clock_divider
-  generic map (DIVISOR => 2)
+  generic map (DIVISOR => 8)
   port map (clk => sys_clk, cen => cen_6);
 
   -- generate a 4MHz clock enable signal
   clock_divider_4 : entity work.clock_divider
-  generic map (DIVISOR => 3)
+  generic map (DIVISOR => 12)
   port map (clk => sys_clk, cen => cen_4);
 
   -- SDRAM controller
   sdram : entity work.sdram
   generic map (CLK_FREQ => 48.0)
   port map (
-    clk => rom_clk,
-
     reset => reset,
+    clk   => sys_clk,
 
     -- IO interface
     addr  => sdram_addr,
@@ -164,9 +160,8 @@ begin
   -- ROM controller
   rom_controller : entity work.rom_controller
   port map (
-    clk => rom_clk,
-
     reset => reset,
+    clk   => sys_clk,
 
     -- read interface
     sprite_rom_addr => sprite_rom_addr,
