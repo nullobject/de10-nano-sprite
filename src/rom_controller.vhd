@@ -36,13 +36,11 @@ use work.types.all;
 -- timely manner.
 entity rom_controller is
   port (
-    -- clock
-    clk : in std_logic;
-
-    -- reset
+    -- clock signals
+    clk   : in std_logic;
     reset : in std_logic;
 
-    -- read interface
+    -- ROM interface
     sprite_rom_addr : in unsigned(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
     sprite_rom_data : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
     char_rom_addr   : in unsigned(CHAR_ROM_ADDR_WIDTH-1 downto 0);
@@ -52,18 +50,18 @@ entity rom_controller is
     bg_rom_addr     : in unsigned(BG_ROM_ADDR_WIDTH-1 downto 0);
     bg_rom_data     : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
 
-    -- write interface
-    ioctl_addr : in unsigned(IOCTL_ADDR_WIDTH-1 downto 0);
-    ioctl_data : in std_logic_vector(IOCTL_DATA_WIDTH-1 downto 0);
-    ioctl_we   : in std_logic;
-
     -- SDRAM interface
     sdram_addr  : out unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
     sdram_din   : out std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
     sdram_dout  : in std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
     sdram_we    : out std_logic;
     sdram_valid : in std_logic;
-    sdram_ready : in std_logic
+    sdram_ready : in std_logic;
+
+    -- IOCTL interface
+    ioctl_addr : in unsigned(IOCTL_ADDR_WIDTH-1 downto 0);
+    ioctl_data : in std_logic_vector(IOCTL_DATA_WIDTH-1 downto 0);
+    ioctl_we   : in std_logic
   );
 end rom_controller;
 

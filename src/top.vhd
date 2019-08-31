@@ -54,15 +54,14 @@ entity top is
 end top;
 
 architecture arch of top is
-  type state_t is (INIT, WRITE, READ);
+  type state_t is (INIT, LOAD, IDLE);
 
   -- clock signals
   signal rom_clk : std_logic;
   signal sys_clk : std_logic;
   signal cen_6   : std_logic;
   signal cen_4   : std_logic;
-
-  signal reset : std_logic;
+  signal reset   : std_logic;
 
   -- state signals
   signal state, next_state : state_t;
@@ -233,15 +232,16 @@ begin
     case state is
       when INIT =>
         if data_counter = 255 then
-          next_state <= WRITE;
+          next_state <= LOAD;
         end if;
 
-      when WRITE =>
+      when LOAD =>
         if data_counter = 16383 then
-          next_state <= READ;
+          next_state <= IDLE;
         end if;
 
-      when READ =>
+      when IDLE =>
+        -- do nothing
     end case;
   end process;
 
@@ -296,7 +296,7 @@ begin
 
   ioctl_addr <= resize(load_rom_addr, ioctl_addr'length);
   ioctl_data <= load_rom_data;
-  ioctl_we   <= '1' when state = WRITE else '0';
+  ioctl_we   <= '1' when state = LOAD else '0';
 
   -- set the RGB data
   rgb <= sprite_data(3 downto 0);
