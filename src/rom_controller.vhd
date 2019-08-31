@@ -108,7 +108,7 @@ begin
   char_rom_segment : entity work.segment
   generic map (
     ROM_ADDR_WIDTH => CHAR_ROM_ADDR_WIDTH,
-    SEGMENT_OFFSET => 16#40#
+    SEGMENT_OFFSET => 16#10#
   )
   port map (
     clk => clk,
@@ -128,7 +128,7 @@ begin
   fg_rom_segment : entity work.segment
   generic map (
     ROM_ADDR_WIDTH => FG_ROM_ADDR_WIDTH,
-    SEGMENT_OFFSET => 16#80#
+    SEGMENT_OFFSET => 16#20#
   )
   port map (
     clk => clk,
@@ -148,7 +148,7 @@ begin
   bg_rom_segment : entity work.segment
   generic map (
     ROM_ADDR_WIDTH => BG_ROM_ADDR_WIDTH,
-    SEGMENT_OFFSET => 16#C0#
+    SEGMENT_OFFSET => 16#30#
   )
   port map (
     clk => clk,

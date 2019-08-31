@@ -142,7 +142,7 @@ end package types;
 package body types is
   function ilog2(n : natural) return natural is
   begin
-    return natural(log2(real(n)));
+    return natural(ceil(log2(real(n))));
   end ilog2;
 
   function sprite_size_in_pixels(size : std_logic_vector(1 downto 0)) return natural is

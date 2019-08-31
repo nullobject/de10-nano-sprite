@@ -54,6 +54,8 @@ entity top is
 end top;
 
 architecture arch of top is
+  constant TILE_ROM_SIZE : natural := 16384;
+
   type state_t is (INIT, LOAD, IDLE);
 
   -- clock signals
@@ -66,7 +68,7 @@ architecture arch of top is
   signal state, next_state : state_t;
 
   -- counters
-  signal data_counter : natural range 0 to 16384;
+  signal data_counter : natural range 0 to TILE_ROM_SIZE-1;
 
   -- IOCTL signals
   signal ioctl_addr : unsigned(IOCTL_ADDR_WIDTH-1 downto 0);
@@ -87,29 +89,16 @@ architecture arch of top is
   -- ROM signals
   signal sprite_rom_addr : unsigned(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
   signal sprite_rom_data : std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
-
-  signal load_rom_addr : unsigned(13 downto 0);
-  signal load_rom_data : std_logic_vector(15 downto 0);
-
-  -- sprite priority data
-  signal sprite_priority : priority_t;
+  signal tile_rom_addr   : unsigned(ilog2(TILE_ROM_SIZE)-1 downto 0);
+  signal tile_rom_data   : std_logic_vector(IOCTL_DATA_WIDTH-1 downto 0);
 
   -- sprite data
   signal sprite_data : byte_t;
 
   -- RGB data
   signal rgb : nibble_t;
-
-  -- debug
-  attribute keep : boolean;
-  attribute keep of sys_clk         : signal is true;
-  attribute keep of cen_6           : signal is true;
-  attribute keep of load_rom_addr   : signal is true;
-  attribute keep of load_rom_data   : signal is true;
-  attribute keep of sprite_rom_addr : signal is true;
-  attribute keep of sprite_rom_data : signal is true;
 begin
-  -- generate a 12MHz clock signal
+  -- generate the clock signals
   my_pll : entity pll.pll
   port map (
     refclk   => clk,
@@ -189,8 +178,8 @@ begin
 
   tile_rom : entity work.single_port_rom
   generic map (
-    ADDR_WIDTH => 14,
-    DATA_WIDTH => 16,
+    ADDR_WIDTH => ilog2(TILE_ROM_SIZE),
+    DATA_WIDTH => IOCTL_DATA_WIDTH,
     INIT_FILE  => "rom/vid_6g.mif"
   )
   port map (
@@ -215,7 +204,7 @@ begin
     video    => video,
     rom_addr => sprite_rom_addr,
     rom_data => sprite_rom_data,
-    priority => sprite_priority,
+    priority => open,
     data     => sprite_data
   );
 
@@ -226,12 +215,12 @@ begin
 
     case state is
       when INIT =>
-        if data_counter = 255 then
+        if data_counter = TILE_ROM_SIZE-1 then
           next_state <= LOAD;
         end if;
 
       when LOAD =>
-        if data_counter = 16383 then
+        if data_counter = TILE_ROM_SIZE-1 then
           next_state <= IDLE;
         end if;
 
@@ -285,13 +274,22 @@ begin
     end if;
   end process;
 
+  -- latch tile ROM data
+  latch_rom_data : process (sys_clk)
+  begin
+    if rising_edge(sys_clk) then
+      if cen_4 = '1' then
+        ioctl_addr <= resize(tile_rom_addr, ioctl_addr'length);
+        ioctl_data <= tile_rom_data;
+      end if;
+    end if;
+  end process;
+
   reset <= not key(0);
 
-  load_rom_addr <= to_unsigned(data_counter, load_rom_addr'length);
+  tile_rom_addr <= to_unsigned(data_counter, tile_rom_addr'length);
 
-  ioctl_addr <= resize(load_rom_addr, ioctl_addr'length);
-  ioctl_data <= load_rom_data;
-  ioctl_we   <= '1' when state = LOAD else '0';
+  ioctl_we <= '1' when state = LOAD else '0';
 
   -- set the RGB data
   rgb <= sprite_data(3 downto 0);

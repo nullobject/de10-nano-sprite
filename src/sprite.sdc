@@ -27,19 +27,23 @@ create_clock -name clk -period 20 [get_ports clk]
 
 derive_pll_clocks
 
-create_generated_clock -name SDRAM_CLK -source [get_pins {my_pll|pll_inst|altera_pll_i|outclk_wire[2]~CLKENA0|outclk}] [get_ports {SDRAM_CLK}]
+create_generated_clock -name SDRAM_CLK -source [get_pins {my_pll|pll_inst|altera_pll_i|outclk_wire[1]~CLKENA0|outclk}] [get_ports SDRAM_CLK]
 
 derive_clock_uncertainty
 
 # This is tAC in the data sheet
-set_input_delay -max -clock SDRAM_CLK 6.0ns [get_ports SDRAM_DQ[*]]
+set_input_delay -max -clock SDRAM_CLK 6 [get_ports SDRAM_DQ[*]]
 # this is tOH in the data sheet
-set_input_delay -min -clock SDRAM_CLK 2.5ns [get_ports SDRAM_DQ[*]]
+set_input_delay -min -clock SDRAM_CLK 2.5 [get_ports SDRAM_DQ[*]]
 
 # This is tIS in the data sheet (setup time)
-set_output_delay -max -clock SDRAM_CLK 1.5ns [get_ports {SDRAM_D* SDRAM_A* SDRAM_BA* SDRAM_n* SDRAM_CKE}]
+set_output_delay -max -clock SDRAM_CLK 1.5 [get_ports SDRAM_*]
 # This is tIH in the data sheet (hold time)
-set_output_delay -min -clock SDRAM_CLK 0.8ns [get_ports {SDRAM_D* SDRAM_A* SDRAM_BA* SDRAM_n* SDRAM_CKE}]
+set_output_delay -min -clock SDRAM_CLK 1.5 [get_ports SDRAM_*]
+
+# The above statement generates an output delay constraint for SDRAM_CLK pin
+# itself that is not needed:
+remove_output_delay SDRAM_CLK
 
 # inform quartus that the LED output port has no critical timing requirements
 # its a single output port driving an LED, there are no timing relationships
