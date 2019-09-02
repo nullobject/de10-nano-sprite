@@ -26,7 +26,6 @@ use ieee.math_real.all;
 package types is
   -- IOCTL
   constant IOCTL_ADDR_WIDTH : natural := 22;
-  constant IOCTL_DATA_WIDTH : natural := 16;
 
   -- SDRAM
   constant SDRAM_BANK_WIDTH        : natural := 2;

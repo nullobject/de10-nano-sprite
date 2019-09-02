@@ -55,22 +55,30 @@ entity rom_controller is
     sdram_din   : out std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
     sdram_dout  : in std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
     sdram_we    : out std_logic;
+    sdram_ack   : in std_logic;
     sdram_valid : in std_logic;
     sdram_ready : in std_logic;
 
     -- IOCTL interface
-    ioctl_addr : in unsigned(IOCTL_ADDR_WIDTH-1 downto 0);
-    ioctl_data : in std_logic_vector(IOCTL_DATA_WIDTH-1 downto 0);
-    ioctl_we   : in std_logic
+    ioctl_addr     : in unsigned(IOCTL_ADDR_WIDTH-1 downto 0);
+    ioctl_data     : in byte_t;
+    ioctl_wr       : in std_logic;
+    ioctl_download : in std_logic
   );
 end rom_controller;
 
 architecture arch of rom_controller is
-  -- enums
+  type state_t is (IDLE, WRITE, WRITE_WAIT);
   type rom_t is (SPRITE_ROM, CHAR_ROM, FG_ROM, BG_ROM);
+
+  -- state signals
+  signal state, next_state : state_t;
 
   -- currently enabled ROM
   signal current_rom : rom_t;
+
+  -- control signals
+  signal start : std_logic;
 
   -- chip select signals
   signal sprite_rom_cs : std_logic;
@@ -165,6 +173,58 @@ begin
     sdram_valid => sdram_valid
   );
 
+  -- Convert bytes received from IOCTL interface into 32-bit words.
+  --
+  -- The SDRAM controller has a 32-bit interface, so we need to buffer bytes
+  -- received from the IOCTL interface in order to write 32-bit words to the
+  -- SDRAM.
+  download_buffer : entity work.download_buffer
+  generic map (SIZE => 4)
+  port map (
+    reset => reset,
+    clk   => clk,
+    din   => ioctl_data,
+    dout  => sdram_din,
+    we    => ioctl_download and ioctl_wr,
+    valid => start
+  );
+
+  -- state machine
+  fsm : process (state, start, sdram_ack, sdram_ready)
+  begin
+    next_state <= state;
+
+    case state is
+      -- this is the default state, we just wait for the start signal
+      when IDLE =>
+        if start = '1' then
+          next_state <= WRITE;
+        end if;
+
+      -- flush the buffer to the SDRAM
+      when WRITE =>
+        if sdram_ack = '1' then
+          next_state <= WRITE_WAIT;
+        end if;
+
+      -- wait for the write to complete
+      when WRITE_WAIT =>
+        if sdram_ready = '1' then
+          next_state <= IDLE;
+        end if;
+    end case;
+  end process;
+
+  -- latch the next state
+  latch_next_state : process (clk, reset)
+  begin
+    if reset = '1' then
+      state <= IDLE;
+    elsif rising_edge(clk) then
+      state <= next_state;
+    end if;
+  end process;
+
   -- update the current ROM
   update_current_rom : process (clk, reset)
   begin
@@ -178,13 +238,16 @@ begin
   end process;
 
   -- set the chip select signals
-  sprite_rom_cs <= '1' when current_rom = SPRITE_ROM and ioctl_we = '0' else '0';
-  char_rom_cs   <= '1' when current_rom = CHAR_ROM   and ioctl_we = '0' else '0';
-  fg_rom_cs     <= '1' when current_rom = FG_ROM     and ioctl_we = '0' else '0';
-  bg_rom_cs     <= '1' when current_rom = BG_ROM     and ioctl_we = '0' else '0';
+  sprite_rom_cs <= '1' when state = IDLE and current_rom = SPRITE_ROM else '0';
+  char_rom_cs   <= '1' when state = IDLE and current_rom = CHAR_ROM   else '0';
+  fg_rom_cs     <= '1' when state = IDLE and current_rom = FG_ROM     else '0';
+  bg_rom_cs     <= '1' when state = IDLE and current_rom = BG_ROM     else '0';
 
-  -- set the IOCTL address if we're writing, otherwise set it to zero
-  ioctl_sdram_addr <= resize(ioctl_addr, ioctl_sdram_addr'length) when ioctl_we = '1' else (others => '0');
+  -- Set the IOCTL address if we're writing, otherwise set it to zero.
+  --
+  -- We need to divide the IOCTL address by four, because we are writing
+  -- a 32-bit word to the SDRAM.
+  ioctl_sdram_addr <= resize(shift_right(ioctl_addr, 2), ioctl_sdram_addr'length) when ioctl_download = '1' else (others => '0');
 
   -- mux the SDRAM address
   sdram_addr <= ioctl_sdram_addr or
@@ -193,9 +256,6 @@ begin
                 fg_rom_sdram_addr or
                 bg_rom_sdram_addr;
 
-  -- set the SDRAM input data
-  sdram_din <= ioctl_data;
-
-  -- enable writing to the SDRAM if data is being written to the IOCTL
-  sdram_we <= ioctl_we;
+  -- set SDRAM write enable
+  sdram_we <= '1' when state = WRITE else '0';
 end architecture arch;
