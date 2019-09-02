@@ -34,8 +34,8 @@ package types is
   constant SDRAM_DATA_WIDTH        : natural := 16;
   constant SDRAM_COL_WIDTH         : natural := 9;
   constant SDRAM_ROW_WIDTH         : natural := 13;
-  constant SDRAM_INPUT_ADDR_WIDTH  : natural := 25; -- 32MB
-  constant SDRAM_INPUT_DATA_WIDTH  : natural := 16;
+  constant SDRAM_INPUT_ADDR_WIDTH  : natural := 24; -- 32MB
+  constant SDRAM_INPUT_DATA_WIDTH  : natural := 32;
   constant SDRAM_OUTPUT_DATA_WIDTH : natural := 32;
 
   constant SPRITE_RAM_GPU_ADDR_WIDTH : natural := 4;

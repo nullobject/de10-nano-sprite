@@ -25,10 +25,8 @@ use ieee.math_real.all;
 
 use work.types.all;
 
--- This module implements a memory controller for a 16Mx16 SDRAM memory module.
---
--- The ready signal is asserted when the memory controller is ready to execute
--- a read or write operation.
+-- The SDRAM controller provides a symmetric 32-bit read/write interface to
+-- a 16Mx16 (32Mb) SDRAM memory module.
 entity sdram is
   generic (
     -- clock frequency in MHz
@@ -36,7 +34,7 @@ entity sdram is
   );
   port (
     -- reset
-    reset : in std_logic;
+    reset : in std_logic := '0';
 
     -- clock
     clk : in std_logic;
@@ -46,6 +44,7 @@ entity sdram is
     din   : in std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
     dout  : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
     we    : in std_logic;
+    ack   : out std_logic;
     valid : out std_logic;
     ready : out std_logic;
 
@@ -92,8 +91,8 @@ architecture arch of sdram is
   -- availability of the output data
   constant CAS_LATENCY : natural := 2; -- 2=below 133MHz, 3=above 133MHz
 
-  -- the write burst mode toggles bursting during a write command
-  constant WRITE_BURST_MODE : std_logic := '1'; -- 0=burst, 1=single
+  -- the write burst mode enables bursting for write operations
+  constant WRITE_BURST_MODE : std_logic := '0'; -- 0=burst, 1=single
 
   -- the value written to the mode register to configure the memory
   constant MODE_REG : unsigned(SDRAM_ADDR_WIDTH-1 downto 0) := (
@@ -128,7 +127,7 @@ architecture arch of sdram is
   -- to be executed 8192 times every 64ms
   constant REFRESH_MAX : natural := natural(floor(64000000.0/8192.0/CLK_PERIOD));
 
-  type state_t is (INIT, MODE, IDLE, ACTIVE, READ, READ_WAIT, WRITE, REFRESH);
+  type state_t is (INIT, MODE, IDLE, ACTIVE, READ, WRITE, REFRESH);
 
   -- state signals
   signal state, next_state : state_t;
@@ -140,8 +139,9 @@ architecture arch of sdram is
   signal load_mode_done : std_logic;
   signal active_done    : std_logic;
   signal refresh_done   : std_logic;
-  signal read_done      : std_logic;
   signal first_word     : std_logic;
+  signal read_done      : std_logic;
+  signal write_done     : std_logic;
   signal should_refresh : std_logic;
 
   -- counters
@@ -160,7 +160,7 @@ architecture arch of sdram is
   alias bank : unsigned(SDRAM_BANK_WIDTH-1 downto 0) is addr_reg(SDRAM_COL_WIDTH+SDRAM_ROW_WIDTH+SDRAM_BANK_WIDTH-1 downto SDRAM_COL_WIDTH+SDRAM_ROW_WIDTH);
 begin
   -- state machine
-  fsm : process (state, wait_counter, we_reg, load_mode_done, active_done, refresh_done, read_done, should_refresh)
+  fsm : process (state, wait_counter, we_reg, load_mode_done, active_done, refresh_done, read_done, write_done, should_refresh)
   begin
     next_state <= state;
 
@@ -217,17 +217,15 @@ begin
 
       -- execute a read command
       when READ =>
-        next_state <= READ_WAIT;
-
-      -- wait for the read to complete
-      when READ_WAIT =>
         if read_done = '1' then
           next_state <= IDLE;
         end if;
 
       -- execute a write command
       when WRITE =>
-        next_state <= IDLE;
+        if write_done = '1' then
+          next_state <= IDLE;
+        end if;
     end case;
   end process;
 
@@ -284,15 +282,10 @@ begin
   begin
     if rising_edge(clk) then
       if state = IDLE then
-        if we = '1' then
-          -- we want to address 16-bit words during a write operation
-          addr_reg <= addr;
-        else
-          -- we want to address 32-bit words during a read operation
-          addr_reg <= shift_left(addr, 1);
-        end if;
-        din_reg <= din;
-        we_reg  <= we;
+        -- we need to multiply the address by two because we are bursting 32-bit words
+        addr_reg <= shift_left(addr, 1);
+        din_reg  <= din;
+        we_reg   <= we;
       end if;
     end if;
   end process;
@@ -304,7 +297,7 @@ begin
   latch_sdram_data : process (clk)
   begin
     if rising_edge(clk) then
-      if state = READ_WAIT and first_word = '1' then
+      if state = READ and first_word = '1' then
         dout_reg <= sdram_dq;
       end if;
     end if;
@@ -314,12 +307,16 @@ begin
   load_mode_done <= '1' when wait_counter = LOAD_MODE_WAIT-1    else '0';
   active_done    <= '1' when wait_counter = ACTIVE_WAIT-1       else '0';
   refresh_done   <= '1' when wait_counter = AUTO_REFRESH_WAIT-1 else '0';
-  read_done      <= '1' when wait_counter = CAS_LATENCY-0       else '0';
-  first_word     <= '1' when wait_counter = CAS_LATENCY-1       else '0';
+  first_word     <= '1' when wait_counter = CAS_LATENCY         else '0';
+  read_done      <= '1' when wait_counter = CAS_LATENCY+1       else '0';
+  write_done     <= '1' when wait_counter = BURST_LENGTH-1      else '0';
   should_refresh <= '1' when refresh_counter >= REFRESH_MAX-1   else '0';
 
-  -- the output data is valid when the read is done
-  valid <= '1' when state = READ_WAIT and read_done = '1' else '0';
+  -- the ACK signal is asserted after a write operation has completed
+  ack <= '1' when state = WRITE and write_done = '1' else '0';
+
+  -- the VALID signal is asserted after a read operation has completed
+  valid <= '1' when state = READ and read_done = '1' else '0';
 
   -- the memory controller is ready if we're in the IDLE state
   ready <= '1' when state = IDLE else '0';
@@ -351,8 +348,10 @@ begin
       "0010" & col    when WRITE,  -- auto precharge
       (others => '0') when others;
 
-  -- set SDRAM input data if we're writing, otherwise set it to high impedance
-  sdram_dq <= din_reg when state = WRITE else (others => 'Z');
+  -- Write the data to the SDRAM data bus if we're writing, otherwise set it to high impedance.
+  --
+  -- We need to decode the next 16-bit word from the write buffer.
+  sdram_dq <= din_reg((BURST_LENGTH-wait_counter)*SDRAM_DATA_WIDTH-1 downto (BURST_LENGTH-wait_counter-1)*SDRAM_DATA_WIDTH) when state = WRITE else (others => 'Z');
 
   -- set SDRAM data mask
   sdram_dqmh <= '0';
