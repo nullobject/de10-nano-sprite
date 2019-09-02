@@ -68,7 +68,7 @@ entity rom_controller is
 end rom_controller;
 
 architecture arch of rom_controller is
-  type state_t is (IDLE, WRITE, WRITE_WAIT);
+  type state_t is (IDLE, WRITE);
   type rom_t is (SPRITE_ROM, CHAR_ROM, FG_ROM, BG_ROM);
 
   -- state signals
@@ -190,7 +190,7 @@ begin
   );
 
   -- state machine
-  fsm : process (state, start, sdram_ack, sdram_ready)
+  fsm : process (state, start, sdram_ack)
   begin
     next_state <= state;
 
@@ -201,15 +201,9 @@ begin
           next_state <= WRITE;
         end if;
 
-      -- flush the buffer to the SDRAM
+      -- write to the SDRAM
       when WRITE =>
         if sdram_ack = '1' then
-          next_state <= WRITE_WAIT;
-        end if;
-
-      -- wait for the write to complete
-      when WRITE_WAIT =>
-        if sdram_ready = '1' then
           next_state <= IDLE;
         end if;
     end case;
