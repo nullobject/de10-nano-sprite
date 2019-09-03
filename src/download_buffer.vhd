@@ -24,46 +24,60 @@ use ieee.numeric_std.all;
 
 use work.types.all;
 
--- A segment provides a 32-bit read-only interface to a contiguous block of ROM
--- data, located at some offset in the SDRAM.
-entity segment is
+-- A download buffer writes a stream of bytes to an internal buffer. When the
+-- buffer is full, it is flushed as a single word.
+--
+-- For example, with a buffer size of four, every four bytes written will be
+-- flushed as a single 32-bit word.
+entity download_buffer is
   generic (
-    -- the width of the ROM address bus
-    ROM_ADDR_WIDTH : natural;
-
-    -- the offset of the ROM data in the SDRAM
-    ROM_OFFSET : natural := 0
+    -- the size of the buffer (in bytes)
+    SIZE : natural
   );
   port (
+    -- reset
+    reset : in std_logic := '0';
+
     -- clock
     clk : in std_logic;
 
-    -- chip select
-    cs : in std_logic;
+    -- data in
+    din : in byte_t;
 
-    -- ROM interface
-    rom_addr : in unsigned(ROM_ADDR_WIDTH-1 downto 0);
-    rom_data : out std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
+    -- data out
+    dout : out std_logic_vector(SIZE*8-1 downto 0);
 
-    -- SDRAM interface
-    sdram_addr  : out unsigned(SDRAM_CTRL_ADDR_WIDTH-1 downto 0);
-    sdram_data  : in std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
-    sdram_valid : in std_logic
+    -- write enable
+    we : in std_logic;
+
+    -- asserted when the data on the output bus is valid (i.e. the buffer has
+    -- been flushed)
+    valid : out std_logic
   );
-end segment;
+end download_buffer;
 
-architecture arch of segment is
+architecture arch of download_buffer is
+  signal counter : natural range 0 to SIZE-1;
 begin
-  -- latch ROM data from the SDRAM
-  latch_rom_data : process (clk)
+  process (clk, reset)
   begin
-    if rising_edge(clk) then
-      if sdram_valid = '1' and cs = '1' then
-        rom_data <= sdram_data;
+    if reset = '1' then
+      counter <= 0;
+    elsif rising_edge(clk) then
+      valid <= '0';
+
+      if we = '1' then
+        -- write the word to the output data bus
+        dout((SIZE-counter)*8-1 downto (SIZE-counter-1)*8) <= din;
+
+        -- increment the counter
+        counter <= counter + 1;
+
+        -- flush the buffer if it is full
+        if counter = SIZE-1 then
+          valid <= '1';
+        end if;
       end if;
     end if;
   end process;
-
-  -- set SDRAM address
-  sdram_addr <= resize(rom_addr, sdram_addr'length)+ROM_OFFSET when cs = '1' else (others => '0');
-end architecture arch;
+end architecture;

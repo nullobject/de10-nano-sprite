@@ -32,8 +32,10 @@ entity top is
     clk : in std_logic;
 
     -- VGA signals
-    vga_r, vga_g, vga_b : out std_logic_vector(5 downto 0);
-    vga_csync           : out std_logic;
+    vga_r     : out std_logic_vector(5 downto 0);
+    vga_g     : out std_logic_vector(5 downto 0);
+    vga_b     : out std_logic_vector(5 downto 0);
+    vga_csync : out std_logic;
 
     -- buttons
     key : in std_logic_vector(0 downto 0);
@@ -54,9 +56,9 @@ entity top is
 end top;
 
 architecture arch of top is
-  constant TILE_ROM_SIZE : natural := 16384;
+  constant TILE_ROM_SIZE : natural := 32768;
 
-  type state_t is (INIT, LOAD, IDLE);
+  type state_t is (INIT, PRELOAD, LOAD, IDLE);
 
   -- clock signals
   signal sys_clk : std_logic;
@@ -71,15 +73,17 @@ architecture arch of top is
   signal data_counter : natural range 0 to TILE_ROM_SIZE-1;
 
   -- IOCTL signals
-  signal ioctl_addr : unsigned(IOCTL_ADDR_WIDTH-1 downto 0);
-  signal ioctl_data : std_logic_vector(IOCTL_DATA_WIDTH-1 downto 0);
-  signal ioctl_we   : std_logic;
+  signal ioctl_addr     : unsigned(IOCTL_ADDR_WIDTH-1 downto 0);
+  signal ioctl_data     : byte_t;
+  signal ioctl_wr       : std_logic;
+  signal ioctl_download : std_logic;
 
   -- SDRAM signals
-  signal sdram_addr  : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal sdram_din   : std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0) := (others => '0');
-  signal sdram_dout  : std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
+  signal sdram_addr  : unsigned(SDRAM_CTRL_ADDR_WIDTH-1 downto 0);
+  signal sdram_din   : std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
+  signal sdram_dout  : std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
   signal sdram_we    : std_logic;
+  signal sdram_ack   : std_logic;
   signal sdram_ready : std_logic;
   signal sdram_valid : std_logic;
 
@@ -90,7 +94,7 @@ architecture arch of top is
   signal sprite_rom_addr : unsigned(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
   signal sprite_rom_data : std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
   signal tile_rom_addr   : unsigned(ilog2(TILE_ROM_SIZE)-1 downto 0);
-  signal tile_rom_data   : std_logic_vector(IOCTL_DATA_WIDTH-1 downto 0);
+  signal tile_rom_data   : byte_t;
 
   -- sprite data
   signal sprite_data : byte_t;
@@ -129,9 +133,10 @@ begin
     addr  => sdram_addr,
     din   => sdram_din,
     dout  => sdram_dout,
+    we    => sdram_we,
+    ack   => sdram_ack,
     ready => sdram_ready,
     valid => sdram_valid,
-    we    => sdram_we,
 
     -- SDRAM interface
     sdram_a     => SDRAM_A,
@@ -163,15 +168,17 @@ begin
     bg_rom_data     => open,
 
     -- write interface
-    ioctl_addr => ioctl_addr,
-    ioctl_data => ioctl_data,
-    ioctl_we   => ioctl_we,
+    ioctl_addr     => ioctl_addr,
+    ioctl_data     => ioctl_data,
+    ioctl_wr       => ioctl_wr,
+    ioctl_download => ioctl_download,
 
     -- SDRAM interface
     sdram_addr  => sdram_addr,
     sdram_din   => sdram_din,
     sdram_dout  => sdram_dout,
     sdram_we    => sdram_we,
+    sdram_ack   => sdram_ack,
     sdram_valid => sdram_valid,
     sdram_ready => sdram_ready
   );
@@ -179,13 +186,12 @@ begin
   tile_rom : entity work.single_port_rom
   generic map (
     ADDR_WIDTH => ilog2(TILE_ROM_SIZE),
-    DATA_WIDTH => IOCTL_DATA_WIDTH,
     INIT_FILE  => "rom/vid_6g.mif"
   )
   port map (
     clk  => sys_clk,
-    addr => load_rom_addr,
-    dout => load_rom_data
+    addr => tile_rom_addr,
+    dout => tile_rom_data
   );
 
   -- video timing generator
@@ -216,8 +222,12 @@ begin
     case state is
       when INIT =>
         if data_counter = TILE_ROM_SIZE-1 then
-          next_state <= LOAD;
+          next_state <= PRELOAD;
         end if;
+
+      -- preload the byte from the tile ROM
+      when PRELOAD =>
+        next_state <= LOAD;
 
       when LOAD =>
         if data_counter = TILE_ROM_SIZE-1 then
@@ -274,13 +284,16 @@ begin
     end if;
   end process;
 
-  -- latch tile ROM data
-  latch_rom_data : process (sys_clk)
+  -- write ROM data
+  write_rom_data : process (sys_clk)
   begin
     if rising_edge(sys_clk) then
-      if cen_4 = '1' then
+      ioctl_wr <= '0';
+
+      if cen_4 = '1' and state = LOAD then
         ioctl_addr <= resize(tile_rom_addr, ioctl_addr'length);
         ioctl_data <= tile_rom_data;
+        ioctl_wr   <= '1';
       end if;
     end if;
   end process;
@@ -289,7 +302,7 @@ begin
 
   tile_rom_addr <= to_unsigned(data_counter, tile_rom_addr'length);
 
-  ioctl_we <= '1' when state = LOAD else '0';
+  ioctl_download <= '1' when state = LOAD else '0';
 
   -- set the RGB data
   rgb <= sprite_data(3 downto 0);

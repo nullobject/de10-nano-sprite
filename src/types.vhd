@@ -26,17 +26,15 @@ use ieee.math_real.all;
 package types is
   -- IOCTL
   constant IOCTL_ADDR_WIDTH : natural := 22;
-  constant IOCTL_DATA_WIDTH : natural := 16;
 
   -- SDRAM
-  constant SDRAM_BANK_WIDTH        : natural := 2;
-  constant SDRAM_ADDR_WIDTH        : natural := 13;
-  constant SDRAM_DATA_WIDTH        : natural := 16;
-  constant SDRAM_COL_WIDTH         : natural := 9;
-  constant SDRAM_ROW_WIDTH         : natural := 13;
-  constant SDRAM_INPUT_ADDR_WIDTH  : natural := 25; -- 32MB
-  constant SDRAM_INPUT_DATA_WIDTH  : natural := 16;
-  constant SDRAM_OUTPUT_DATA_WIDTH : natural := 32;
+  constant SDRAM_ADDR_WIDTH      : natural := 13;
+  constant SDRAM_DATA_WIDTH      : natural := 16;
+  constant SDRAM_BANK_WIDTH      : natural := 2;
+  constant SDRAM_COL_WIDTH       : natural := 9;
+  constant SDRAM_ROW_WIDTH       : natural := 13;
+  constant SDRAM_CTRL_ADDR_WIDTH : natural := 23; -- 8Mx32-bit
+  constant SDRAM_CTRL_DATA_WIDTH : natural := 32;
 
   constant SPRITE_RAM_GPU_ADDR_WIDTH : natural := 4;
   constant SPRITE_RAM_GPU_DATA_WIDTH : natural := 64;
