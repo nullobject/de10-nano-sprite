@@ -32,8 +32,10 @@ entity top is
     clk : in std_logic;
 
     -- VGA signals
-    vga_r, vga_g, vga_b : out std_logic_vector(5 downto 0);
-    vga_csync           : out std_logic;
+    vga_r     : out std_logic_vector(5 downto 0);
+    vga_g     : out std_logic_vector(5 downto 0);
+    vga_b     : out std_logic_vector(5 downto 0);
+    vga_csync : out std_logic;
 
     -- buttons
     key : in std_logic_vector(0 downto 0);
@@ -77,9 +79,9 @@ architecture arch of top is
   signal ioctl_download : std_logic;
 
   -- SDRAM signals
-  signal sdram_addr  : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal sdram_din   : std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0) := (others => '0');
-  signal sdram_dout  : std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
+  signal sdram_addr  : unsigned(SDRAM_CTRL_ADDR_WIDTH-1 downto 0);
+  signal sdram_din   : std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
+  signal sdram_dout  : std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
   signal sdram_we    : std_logic;
   signal sdram_ack   : std_logic;
   signal sdram_ready : std_logic;
@@ -258,7 +260,7 @@ begin
         if state /= next_state then -- state changing
           data_counter <= 0;
         else
-          data_counter <= data_counter+1;
+          data_counter <= data_counter + 1;
         end if;
       end if;
     end if;

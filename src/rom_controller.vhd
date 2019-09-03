@@ -24,36 +24,40 @@ use ieee.numeric_std.all;
 
 use work.types.all;
 
--- The ROM controller provides an interface to the GPU for accessing tile data.
+-- The ROM controller handles reading and writing ROM data to the SDRAM. It
+-- provides a read-only interface to the GPU for reading tile data. It also
+-- provides a write-only interface for storing the ROM data received through
+-- the MiSTer IOCTL interface.
 --
--- The original arcade hardware has multiple ROM chips that store the tile data
--- for the different graphics layers. Unfortunately, the Cyclone V chip doesn't
--- have enough memory blocks for us to implement these ROMs. Instead, we need
--- to store the tile data in the SDRAM.
+-- The original arcade hardware has multiple ROM chips that store things like
+-- the program data, tile data, sound data, etc. Unfortunately, the Cyclone
+-- V FPGA doesn't have enough memory blocks for us to implement all these ROMs.
+-- Instead, we need to store the them in the SDRAM.
 --
--- The tile ROMs are accessed concurrently by the GPU, so the job of the ROM
--- controller is to manage reading the tile data from the SDRAM in a fair, and
--- timely manner.
+-- The ROMs are all accessed concurrently, so the ROM controller is responsible
+-- for reading the ROM data from the SDRAM in a fair and timely manner.
 entity rom_controller is
   port (
-    -- clock signals
-    clk   : in std_logic;
+    -- clock
+    clk : in std_logic;
+
+    -- reset
     reset : in std_logic;
 
     -- ROM interface
     sprite_rom_addr : in unsigned(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
-    sprite_rom_data : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
+    sprite_rom_data : out std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
     char_rom_addr   : in unsigned(CHAR_ROM_ADDR_WIDTH-1 downto 0);
-    char_rom_data   : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
+    char_rom_data   : out std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
     fg_rom_addr     : in unsigned(FG_ROM_ADDR_WIDTH-1 downto 0);
-    fg_rom_data     : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
+    fg_rom_data     : out std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
     bg_rom_addr     : in unsigned(BG_ROM_ADDR_WIDTH-1 downto 0);
-    bg_rom_data     : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
+    bg_rom_data     : out std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
 
     -- SDRAM interface
-    sdram_addr  : out unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-    sdram_din   : out std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
-    sdram_dout  : in std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
+    sdram_addr  : out unsigned(SDRAM_CTRL_ADDR_WIDTH-1 downto 0);
+    sdram_din   : out std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
+    sdram_dout  : in std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
     sdram_we    : out std_logic;
     sdram_ack   : in std_logic;
     sdram_valid : in std_logic;
@@ -87,16 +91,16 @@ architecture arch of rom_controller is
   signal bg_rom_cs     : std_logic;
 
   -- address mux signals
-  signal ioctl_sdram_addr      : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal sprite_rom_sdram_addr : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal char_rom_sdram_addr   : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal fg_rom_sdram_addr     : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal bg_rom_sdram_addr     : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
+  signal ioctl_sdram_addr      : unsigned(SDRAM_CTRL_ADDR_WIDTH-1 downto 0);
+  signal sprite_rom_sdram_addr : unsigned(SDRAM_CTRL_ADDR_WIDTH-1 downto 0);
+  signal char_rom_sdram_addr   : unsigned(SDRAM_CTRL_ADDR_WIDTH-1 downto 0);
+  signal fg_rom_sdram_addr     : unsigned(SDRAM_CTRL_ADDR_WIDTH-1 downto 0);
+  signal bg_rom_sdram_addr     : unsigned(SDRAM_CTRL_ADDR_WIDTH-1 downto 0);
 begin
   sprite_rom_segment : entity work.segment
   generic map (
     ROM_ADDR_WIDTH => SPRITE_ROM_ADDR_WIDTH,
-    SEGMENT_OFFSET => 16#00#
+    ROM_OFFSET     => 16#00#
   )
   port map (
     clk => clk,
@@ -116,7 +120,7 @@ begin
   char_rom_segment : entity work.segment
   generic map (
     ROM_ADDR_WIDTH => CHAR_ROM_ADDR_WIDTH,
-    SEGMENT_OFFSET => 16#10#
+    ROM_OFFSET     => 16#10#
   )
   port map (
     clk => clk,
@@ -136,7 +140,7 @@ begin
   fg_rom_segment : entity work.segment
   generic map (
     ROM_ADDR_WIDTH => FG_ROM_ADDR_WIDTH,
-    SEGMENT_OFFSET => 16#20#
+    ROM_OFFSET     => 16#20#
   )
   port map (
     clk => clk,
@@ -156,7 +160,7 @@ begin
   bg_rom_segment : entity work.segment
   generic map (
     ROM_ADDR_WIDTH => BG_ROM_ADDR_WIDTH,
-    SEGMENT_OFFSET => 16#30#
+    ROM_OFFSET     => 16#30#
   )
   port map (
     clk => clk,
@@ -239,8 +243,8 @@ begin
 
   -- Set the IOCTL address if we're writing, otherwise set it to zero.
   --
-  -- We need to divide the IOCTL address by four, because we are writing
-  -- a 32-bit word to the SDRAM.
+  -- We need to divide the IOCTL address by four, because we're writing 32-bit
+  -- words to the SDRAM.
   ioctl_sdram_addr <= resize(shift_right(ioctl_addr, 2), ioctl_sdram_addr'length) when ioctl_download = '1' else (others => '0');
 
   -- mux the SDRAM address

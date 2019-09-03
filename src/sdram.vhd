@@ -25,8 +25,11 @@ use ieee.math_real.all;
 
 use work.types.all;
 
--- The SDRAM controller provides a symmetric 32-bit read/write interface to
--- a 16Mx16 (32Mb) SDRAM memory module.
+-- The SDRAM controller provides a symmetric 32-bit synchronous read-write
+-- interface to a 16Mx16-bit SDRAM memory module.
+--
+-- Because the SDRAM data bus is only 16-bits wide, so the controller must
+-- burst two 16-bit words to read/write a single 32-bit word to the SDRAM.
 entity sdram is
   generic (
     -- clock frequency in MHz
@@ -40,9 +43,9 @@ entity sdram is
     clk : in std_logic;
 
     -- controller interface
-    addr  : in unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-    din   : in std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
-    dout  : out std_logic_vector(SDRAM_OUTPUT_DATA_WIDTH-1 downto 0);
+    addr  : in unsigned(SDRAM_CTRL_ADDR_WIDTH-1 downto 0);
+    din   : in std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
+    dout  : out std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
     we    : in std_logic;
     ack   : out std_logic;
     valid : out std_logic;
@@ -107,7 +110,7 @@ architecture arch of sdram is
   -- calculate the clock period in nanoseconds
   constant CLK_PERIOD : real := 1.0/CLK_FREQ*1000.0;
 
-  -- the number of clock cycles to wait while a LOAD_MODE command is being
+  -- the number of clock cycles to wait while a LOAD MODE command is being
   -- executed
   constant LOAD_MODE_WAIT : natural := natural(ceil(T_MRD/CLK_PERIOD));
 
@@ -149,8 +152,8 @@ architecture arch of sdram is
   signal refresh_counter : natural range 0 to 1023;
 
   -- registers
-  signal addr_reg : unsigned(SDRAM_INPUT_ADDR_WIDTH-1 downto 0);
-  signal din_reg  : std_logic_vector(SDRAM_INPUT_DATA_WIDTH-1 downto 0);
+  signal addr_reg : unsigned(SDRAM_CTRL_ADDR_WIDTH downto 0);
+  signal din_reg  : std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
   signal dout_reg : std_logic_vector(SDRAM_DATA_WIDTH-1 downto 0);
   signal we_reg   : std_logic;
 
@@ -274,16 +277,14 @@ begin
     end if;
   end process;
 
-  -- Latch the input signals.
-  --
-  -- Some of the input signals need to be registered, because they are used
-  -- during later states.
+  -- latch the input signals
   latch_input_signals : process (clk)
   begin
     if rising_edge(clk) then
       if state = IDLE then
-        -- we need to multiply the address by two because we are bursting 32-bit words
-        addr_reg <= shift_left(addr, 1);
+        -- we need to multiply the address by two, because we are converting
+        -- from a 32-bit controller address to a 16-bit SDRAM address
+        addr_reg <= shift_left(resize(addr, addr_reg'length), 1);
         din_reg  <= din;
         we_reg   <= we;
       end if;
@@ -292,8 +293,8 @@ begin
 
   -- Latch the SDRAM data.
   --
-  -- We need to latch the data read from the SDRAM into a register, as it is
-  -- bursted.
+  -- We need to latch the output data into a register, as it's bursted from the
+  -- SDRAM.
   latch_sdram_data : process (clk)
   begin
     if rising_edge(clk) then

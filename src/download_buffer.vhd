@@ -71,7 +71,7 @@ begin
         dout((SIZE-counter)*8-1 downto (SIZE-counter-1)*8) <= din;
 
         -- increment the counter
-        counter <= counter+1;
+        counter <= counter + 1;
 
         -- flush the buffer if it is full
         if counter = SIZE-1 then
