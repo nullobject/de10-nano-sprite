@@ -38,11 +38,11 @@ use work.types.all;
 -- for reading the ROM data from the SDRAM in a fair and timely manner.
 entity rom_controller is
   port (
-    -- clock
-    clk : in std_logic;
-
     -- reset
     reset : in std_logic;
+
+    -- clock
+    clk : in std_logic;
 
     -- ROM interface
     sprite_rom_addr : in unsigned(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
