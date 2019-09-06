@@ -88,14 +88,14 @@ architecture arch of top is
   signal sdram_ready : std_logic;
   signal sdram_valid : std_logic;
 
-  -- video signals
-  signal video : video_t;
-
   -- ROM signals
   signal sprite_rom_addr : unsigned(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
   signal sprite_rom_data : std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
   signal tile_rom_addr   : unsigned(ilog2(TILE_ROM_SIZE)-1 downto 0);
   signal tile_rom_data   : byte_t;
+
+  -- video signals
+  signal video : video_t;
 
   -- sprite data
   signal sprite_data : byte_t;
@@ -272,6 +272,20 @@ begin
     end if;
   end process;
 
+  -- write ROM data
+  write_rom_data : process (sys_clk)
+  begin
+    if rising_edge(sys_clk) then
+      ioctl_wr <= '0';
+
+      if cen_2 = '1' and state = LOAD then
+        ioctl_addr <= resize(tile_rom_addr, ioctl_addr'length);
+        ioctl_data <= tile_rom_data;
+        ioctl_wr   <= '1';
+      end if;
+    end if;
+  end process;
+
   -- latch RGB data from the palette RAM
   latch_pixel_data : process (sys_clk)
   begin
@@ -286,20 +300,6 @@ begin
           vga_g <= (others => '0');
           vga_b <= (others => '0');
         end if;
-      end if;
-    end if;
-  end process;
-
-  -- write ROM data
-  write_rom_data : process (sys_clk)
-  begin
-    if rising_edge(sys_clk) then
-      ioctl_wr <= '0';
-
-      if cen_2 = '1' and state = LOAD then
-        ioctl_addr <= resize(tile_rom_addr, ioctl_addr'length);
-        ioctl_data <= tile_rom_data;
-        ioctl_wr   <= '1';
       end if;
     end if;
   end process;
