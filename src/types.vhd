@@ -38,15 +38,20 @@ package types is
 
   constant SPRITE_RAM_GPU_ADDR_WIDTH : natural := 4;
   constant SPRITE_RAM_GPU_DATA_WIDTH : natural := 64;
-  constant SPRITE_ROM_ADDR_WIDTH     : natural := 13; -- 128kB
-  constant SPRITE_ROM_DATA_WIDTH     : natural := 32;
 
   constant FRAME_BUFFER_ADDR_WIDTH : natural := 16;
   constant FRAME_BUFFER_DATA_WIDTH : natural := 10;
 
-  constant CHAR_ROM_ADDR_WIDTH : natural := 11; -- 32kB
-  constant FG_ROM_ADDR_WIDTH   : natural := 13; -- 128kB
-  constant BG_ROM_ADDR_WIDTH   : natural := 13; -- 128kB
+  constant MAIN_ROM_ADDR_WIDTH   : natural := 16;
+  constant MAIN_ROM_DATA_WIDTH   : natural := 8;
+  constant SPRITE_ROM_ADDR_WIDTH : natural := 13; -- 128kB
+  constant SPRITE_ROM_DATA_WIDTH : natural := 32;
+  constant CHAR_ROM_ADDR_WIDTH   : natural := 11; -- 32kB
+  constant CHAR_ROM_DATA_WIDTH   : natural := 8;
+  constant FG_ROM_ADDR_WIDTH     : natural := 13; -- 128kB
+  constant FG_ROM_DATA_WIDTH     : natural := 8;
+  constant BG_ROM_ADDR_WIDTH     : natural := 13; -- 128kB
+  constant BG_ROM_DATA_WIDTH     : natural := 8;
 
   -- sprite byte 0
   constant SPRITE_HI_CODE_MSB : natural := 7;
@@ -130,6 +135,9 @@ package types is
   -- calculates the log2 of the given number
   function ilog2(n : natural) return natural;
 
+  -- masks the LSBs of the given value
+  function mask_lsb(a : unsigned; n : natural) return unsigned;
+
   -- calculate sprite size (8x8, 16x16, 32x32, 64x64)
   function sprite_size_in_pixels(size : std_logic_vector(1 downto 0)) return natural;
 
@@ -142,6 +150,15 @@ package body types is
   begin
     return natural(ceil(log2(real(n))));
   end ilog2;
+
+  -- masks the LSBs of the given value
+  function mask_lsb(
+    a : unsigned;
+    n : natural
+  ) return unsigned is
+  begin
+    return shift_left(a(a'length-1 downto n), n);
+  end mask_lsb;
 
   function sprite_size_in_pixels(size : std_logic_vector(1 downto 0)) return natural is
   begin

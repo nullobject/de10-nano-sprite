@@ -84,6 +84,7 @@ architecture arch of top is
   signal sdram_din   : std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
   signal sdram_dout  : std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
   signal sdram_we    : std_logic;
+  signal sdram_req   : std_logic;
   signal sdram_ack   : std_logic;
   signal sdram_ready : std_logic;
   signal sdram_valid : std_logic;
@@ -140,6 +141,7 @@ begin
     din   => sdram_din,
     dout  => sdram_dout,
     we    => sdram_we,
+    req   => sdram_req,
     ack   => sdram_ack,
     ready => sdram_ready,
     valid => sdram_valid,
@@ -159,11 +161,20 @@ begin
 
   -- ROM controller
   rom_controller : entity work.rom_controller
+  generic map (
+    MAIN_ROM_OFFSET   => 16#00#,
+    SPRITE_ROM_OFFSET => 16#00#,
+    CHAR_ROM_OFFSET   => 16#00#,
+    FG_ROM_OFFSET     => 16#00#,
+    BG_ROM_OFFSET     => 16#00#
+  )
   port map (
     reset => reset,
     clk   => sys_clk,
 
     -- read interface
+    main_rom_addr   => (others => '0'),
+    main_rom_data   => open,
     sprite_rom_addr => sprite_rom_addr,
     sprite_rom_data => sprite_rom_data,
     char_rom_addr   => (others => '0'),
@@ -184,6 +195,7 @@ begin
     sdram_din   => sdram_din,
     sdram_dout  => sdram_dout,
     sdram_we    => sdram_we,
+    sdram_req   => sdram_req,
     sdram_ack   => sdram_ack,
     sdram_valid => sdram_valid,
     sdram_ready => sdram_ready
