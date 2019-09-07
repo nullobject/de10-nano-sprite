@@ -23,7 +23,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use ieee.math_real.all;
 
-package types is
+package rygar is
   -- IOCTL
   constant IOCTL_ADDR_WIDTH : natural := 22;
 
@@ -143,9 +143,9 @@ package types is
 
   -- initialise sprite from a raw 64-bit value
   function init_sprite(data : std_logic_vector(SPRITE_RAM_GPU_DATA_WIDTH-1 downto 0)) return sprite_t;
-end package types;
+end package rygar;
 
-package body types is
+package body rygar is
   function ilog2(n : natural) return natural is
   begin
     return natural(ceil(log2(real(n))));
@@ -200,4 +200,4 @@ package body types is
     sprite.size     := to_unsigned(sprite_size_in_pixels(data(SPRITE_SIZE_MSB downto SPRITE_SIZE_LSB)), sprite.size'length);
     return sprite;
   end init_sprite;
-end package body types;
+end package body rygar;

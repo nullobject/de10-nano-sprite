@@ -139,6 +139,7 @@ set_global_assignment -name VHDL_FILE src/download_buffer.vhd
 set_global_assignment -name VHDL_FILE src/dual_port_ram.vhd
 set_global_assignment -name VHDL_FILE src/frame_buffer.vhd
 set_global_assignment -name VHDL_FILE src/rom_controller.vhd
+set_global_assignment -name VHDL_FILE src/rygar.vhd
 set_global_assignment -name VHDL_FILE src/sdram.vhd
 set_global_assignment -name VHDL_FILE src/segment.vhd
 set_global_assignment -name VHDL_FILE src/single_port_rom.vhd
@@ -146,7 +147,6 @@ set_global_assignment -name VHDL_FILE src/sprite.vhd
 set_global_assignment -name VHDL_FILE src/sprite_blitter.vhd
 set_global_assignment -name VHDL_FILE src/sync_gen.vhd
 set_global_assignment -name VHDL_FILE src/top.vhd
-set_global_assignment -name VHDL_FILE src/types.vhd
 set_global_assignment -name SDC_FILE src/sprite.sdc
 set_global_assignment -name QIP_FILE src/pll.qip
 set_global_assignment -name SIP_FILE src/pll.sip

@@ -22,7 +22,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-use work.types.all;
+use work.rygar.all;
 
 -- The sprite layer of the graphics pipeline handles the moving graphical
 -- elements you see on the screen.
