@@ -41,6 +41,9 @@ entity segment is
     -- clock
     clk : in std_logic;
 
+    -- chip select
+    cs : in std_logic := '1';
+
     -- ROM interface
     rom_addr : in unsigned(ROM_ADDR_WIDTH-1 downto 0);
     rom_data : out std_logic_vector(ROM_DATA_WIDTH-1 downto 0);
@@ -64,8 +67,9 @@ architecture arch of segment is
   signal cache_addr : unsigned(SDRAM_CTRL_ADDR_WIDTH-1 downto 0);
   signal cache_data : std_logic_vector(SDRAM_CTRL_DATA_WIDTH-1 downto 0);
   signal offset     : natural range 0 to ROM_WORDS-1;
+  signal hit        : std_logic;
 begin
-  -- cache data loaded from the SDRAM
+  -- cache data received from the SDRAM
   cache_sdram_data : process (clk)
   begin
     if rising_edge(clk) then
@@ -76,11 +80,14 @@ begin
     end if;
   end process;
 
+  -- assert the hit signal when the SDRAM address is already in the cache
+  hit <= '1' when sdram_addr = cache_addr else '0';
+
   -- calculate the offset of the ROM address in the cache
   offset <= to_integer(rom_addr(MASK_WIDTH-1 downto 0)) when MASK_WIDTH > 0 else 0;
 
   -- extract the word at the rquested offset in the cache
-  rom_data <= cache_data((ROM_WORDS-offset)*ROM_DATA_WIDTH-1 downto (ROM_WORDS-offset-1)*ROM_DATA_WIDTH);
+  rom_data <= cache_data((ROM_WORDS-offset)*ROM_DATA_WIDTH-1 downto (ROM_WORDS-offset-1)*ROM_DATA_WIDTH) when cs = '1' else (others => '0');
 
   -- We need to mask the LSBs of the address, because we're converting from
   -- a ROM address to a 32-bit SDRAM address.
@@ -90,5 +97,5 @@ begin
   sdram_addr <= resize(mask_lsb(rom_addr, MASK_WIDTH), sdram_addr'length) + ROM_OFFSET;
 
   -- request data from the SDRAM if we have a cache miss
-  sdram_req <= '1' when sdram_addr /= cache_addr else '0';
+  sdram_req <= cs and not hit;
 end architecture arch;

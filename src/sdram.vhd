@@ -311,10 +311,10 @@ begin
   write_done     <= '1' when wait_counter = BURST_LENGTH-1      else '0';
   should_refresh <= '1' when refresh_counter >= REFRESH_MAX-1   else '0';
 
-  -- the ACK signal is asserted after a write operation has completed
+  -- the ack signal is asserted after a write operation has completed
   ack <= '1' when state = WRITE and write_done = '1' else '0';
 
-  -- the VALID signal is asserted after a read operation has completed
+  -- the valid signal is asserted after a read operation has completed
   valid <= '1' when state = READ and read_done = '1' else '0';
 
   -- the memory controller is ready if we're in the IDLE state

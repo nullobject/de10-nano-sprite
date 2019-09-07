@@ -175,6 +175,7 @@ begin
     -- read interface
     main_rom_addr   => (others => '0'),
     main_rom_data   => open,
+    main_rom_cs     => '0',
     sprite_rom_addr => sprite_rom_addr,
     sprite_rom_data => sprite_rom_data,
     char_rom_addr   => (others => '0'),

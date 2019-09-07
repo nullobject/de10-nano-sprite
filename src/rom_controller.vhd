@@ -54,6 +54,7 @@ entity rom_controller is
     -- ROM interface
     main_rom_addr   : in unsigned(MAIN_ROM_ADDR_WIDTH-1 downto 0);
     main_rom_data   : out std_logic_vector(MAIN_ROM_DATA_WIDTH-1 downto 0);
+    main_rom_cs     : in std_logic;
     sprite_rom_addr : in unsigned(SPRITE_ROM_ADDR_WIDTH-1 downto 0);
     sprite_rom_data : out std_logic_vector(SPRITE_ROM_DATA_WIDTH-1 downto 0);
     char_rom_addr   : in unsigned(CHAR_ROM_ADDR_WIDTH-1 downto 0);
@@ -83,8 +84,8 @@ end rom_controller;
 
 architecture arch of rom_controller is
   -- control signals
-  signal pending_read : std_logic;
-  signal valid        : std_logic;
+  signal pending : std_logic;
+  signal valid   : std_logic;
 
   -- request signals
   signal main_rom_req   : std_logic;
@@ -93,12 +94,12 @@ architecture arch of rom_controller is
   signal fg_rom_req     : std_logic;
   signal bg_rom_req     : std_logic;
 
-  -- chip select signals
-  signal main_rom_cs   : std_logic;
-  signal sprite_rom_cs : std_logic;
-  signal char_rom_cs   : std_logic;
-  signal fg_rom_cs     : std_logic;
-  signal bg_rom_cs     : std_logic;
+  -- enable signals
+  signal main_rom_en   : std_logic;
+  signal sprite_rom_en : std_logic;
+  signal char_rom_en   : std_logic;
+  signal fg_rom_en     : std_logic;
+  signal bg_rom_en     : std_logic;
 
   -- address mux signals
   signal ioctl_sdram_addr      : unsigned(SDRAM_CTRL_ADDR_WIDTH-1 downto 0);
@@ -116,12 +117,13 @@ begin
   )
   port map (
     clk         => clk,
+    cs          => main_rom_cs,
     rom_addr    => main_rom_addr,
     rom_data    => main_rom_data,
     sdram_addr  => main_rom_sdram_addr,
     sdram_data  => sdram_dout,
     sdram_req   => main_rom_req,
-    sdram_valid => main_rom_cs and sdram_valid
+    sdram_valid => main_rom_en and sdram_valid
   );
 
   sprite_rom : entity work.segment
@@ -137,7 +139,7 @@ begin
     sdram_addr  => sprite_rom_sdram_addr,
     sdram_data  => sdram_dout,
     sdram_req   => sprite_rom_req,
-    sdram_valid => sprite_rom_cs and sdram_valid
+    sdram_valid => sprite_rom_en and sdram_valid
   );
 
   char_rom : entity work.segment
@@ -153,7 +155,7 @@ begin
     sdram_addr  => char_rom_sdram_addr,
     sdram_data  => sdram_dout,
     sdram_req   => char_rom_req,
-    sdram_valid => char_rom_cs and sdram_valid
+    sdram_valid => char_rom_en and sdram_valid
   );
 
   fg_rom : entity work.segment
@@ -169,7 +171,7 @@ begin
     sdram_addr  => fg_rom_sdram_addr,
     sdram_data  => sdram_dout,
     sdram_req   => fg_rom_req,
-    sdram_valid => fg_rom_cs and sdram_valid
+    sdram_valid => fg_rom_en and sdram_valid
   );
 
   bg_rom : entity work.segment
@@ -185,12 +187,12 @@ begin
     sdram_addr  => bg_rom_sdram_addr,
     sdram_data  => sdram_dout,
     sdram_req   => bg_rom_req,
-    sdram_valid => bg_rom_cs and sdram_valid
+    sdram_valid => bg_rom_en and sdram_valid
   );
 
-  -- The SDRAM controller has a 32-bit interface, so we need to buffer the
-  -- bytes received from the IOCTL interface in order to write 32-bit words to
-  -- the SDRAM.
+  -- The SDRAM controller has a 32-bit interface, so we need to buffer every
+  -- four bytes received from the IOCTL interface in order to write to the
+  -- SDRAM.
   download_buffer : entity work.download_buffer
   generic map (SIZE => 4)
   port map (
@@ -206,40 +208,36 @@ begin
   update_current_rom : process (clk, reset)
   begin
     if reset = '1' then
-      main_rom_cs   <= '0';
-      sprite_rom_cs <= '0';
-      char_rom_cs   <= '0';
-      fg_rom_cs     <= '0';
-      bg_rom_cs     <= '0';
+      main_rom_en   <= '0';
+      sprite_rom_en <= '0';
+      char_rom_en   <= '0';
+      fg_rom_en     <= '0';
+      bg_rom_en     <= '0';
     elsif rising_edge(clk) then
-      if pending_read = '0' or sdram_valid = '1' then
-        main_rom_cs   <= '0';
-        sprite_rom_cs <= '0';
-        char_rom_cs   <= '0';
-        fg_rom_cs     <= '0';
-        bg_rom_cs     <= '0';
-
+      if pending = '0' or sdram_valid = '1' then
         if main_rom_req = '1' then
-          main_rom_cs <= '1';
+          main_rom_en <= '1';
         elsif sprite_rom_req = '1' then
-          sprite_rom_cs <= '1';
+          sprite_rom_en <= '1';
         elsif char_rom_req = '1' then
-          char_rom_cs <= '1';
+          char_rom_en <= '1';
         elsif fg_rom_req = '1' then
-          fg_rom_cs <= '1';
+          fg_rom_en <= '1';
         elsif bg_rom_req = '1' then
-          bg_rom_cs <= '1';
+          bg_rom_en <= '1';
+        else
+          main_rom_en   <= '0';
+          sprite_rom_en <= '0';
+          char_rom_en   <= '0';
+          fg_rom_en     <= '0';
+          bg_rom_en     <= '0';
         end if;
       end if;
     end if;
   end process;
 
-  -- there is a pending read operation when any of the ROMs are selected
-  pending_read <= main_rom_cs or
-                  sprite_rom_cs or
-                  char_rom_cs or
-                  fg_rom_cs or
-                  bg_rom_cs;
+  -- the pending signal is asserted when any of the ROMs are enabled
+  pending <= main_rom_en or sprite_rom_en or char_rom_en or fg_rom_en or bg_rom_en;
 
   -- we need to divide the address by four, because we're converting from
   -- a 8-bit IOCTL address to a 32-bit SDRAM address
@@ -247,15 +245,16 @@ begin
 
   -- mux the SDRAM address
   sdram_addr <= ioctl_sdram_addr      when ioctl_download = '1' else
-                main_rom_sdram_addr   when main_rom_cs = '1'    else
-                sprite_rom_sdram_addr when sprite_rom_cs = '1'  else
-                char_rom_sdram_addr   when char_rom_cs = '1'    else
-                fg_rom_sdram_addr     when fg_rom_cs = '1'      else
-                bg_rom_sdram_addr     when bg_rom_cs = '1'      else
+                main_rom_sdram_addr   when main_rom_en = '1'    else
+                sprite_rom_sdram_addr when sprite_rom_en = '1'  else
+                char_rom_sdram_addr   when char_rom_en = '1'    else
+                fg_rom_sdram_addr     when fg_rom_en = '1'      else
+                bg_rom_sdram_addr     when bg_rom_en = '1'      else
                 (others => '0');
 
-  sdram_req <= (ioctl_download and valid) or (not ioctl_download and pending_read);
+  -- request data from the SDRAM
+  sdram_req <= (ioctl_download and valid) or (not ioctl_download and pending);
 
-  -- set SDRAM write enable
+  -- write to the SDRAM when we're downloading ROM data
   sdram_we <= ioctl_download;
 end architecture arch;
